@@ -33,7 +33,8 @@ export function bandsOf(base, n) {
 }
 export function curve(base, n, points, hp) {
   const eqOn = S.get(`${base}/eq/on`) ?? 1;
-  const co = eqOn ? bandsOf(base, n).map((b) => biquad(b.type, b.f, b.g, b.type === 3 ? b.q * 1.4 : b.q)) : [];
+  // Q shapes only the PEQ and VEQ curves. Cuts and shelves draw with a fixed slope.
+  const co = eqOn ? bandsOf(base, n).map((b) => biquad(b.type, b.f, b.g, b.type === 2 ? b.q : b.type === 3 ? b.q * 1.4 : .707)) : [];
   if (hp && S.get(`${base}/preamp/hpon`)) co.push(biquad(0, SCL.hpf.val(S.get(`${base}/preamp/hpf`) ?? 0), 0, .707));
   const r = new Float32Array(points);
   for (let i = 0; i < points; i++) {
