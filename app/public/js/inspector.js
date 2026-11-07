@@ -251,7 +251,7 @@ export function openFull(page) {
   document.addEventListener("keydown", fullKey, true);
   drawFull();
 }
-function closeFull() {
+export function closeFull() {
   if (!full) return;
   full = null; $("#fullc")?.remove();
   document.removeEventListener("keydown", fullKey, true);
@@ -262,6 +262,8 @@ function closeFull() {
 // DiGiCo view: a small window beside the channel strip, not full screen.
 const POP = [["gate", "Gate"], ["dyn", "Comp"], ["eq", "EQ"]];
 let pop = null;
+// The section page open now, in the window or full screen.
+export const openPage = () => pop || full;
 const popKey = (e) => { if (e.key === "Escape" && e.target.tagName !== "INPUT" && !document.querySelector(".pp")) { e.preventDefault(); e.stopPropagation(); closePop(); } };
 export function placePop() {
   const o = $("#dpop"); if (!o) return;

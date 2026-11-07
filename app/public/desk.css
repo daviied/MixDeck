@@ -203,3 +203,13 @@ button.dt.ins.on { background: #c58bff; }
 /* Selected channel: a frame and tint over the whole strip */
 .strip.dstrip { position: relative; }
 .strip.dstrip.sel::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border: 2px solid var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+.dnote { font-size: .6rem; color: var(--dim); padding: .1rem 0; }
+/* Gate lights and comp gain reduction meter, at the right of the row */
+.ds.lt { padding-right: .75rem; }
+.dgl { position: absolute; top: 0; bottom: 0; right: .16rem; display: flex; flex-direction: column; justify-content: center; gap: .14rem; pointer-events: none; }
+.dgl i { display: block; width: .4rem; height: .4rem; border-radius: 50%; background: #262b31; box-shadow: inset 0 0 0 1px #000; }
+.dgl i.r.on { background: #ff4d4d; box-shadow: 0 0 .3rem #ff4d4d; }
+.dgl i.a.on { background: #ffb627; box-shadow: 0 0 .3rem #ffb627; }
+.dgl i.g.on { background: #38d67a; box-shadow: 0 0 .3rem #38d67a; }
+.dcm { position: absolute; top: .2rem; bottom: .2rem; right: .2rem; width: .36rem; background: #05080b; border-radius: .1rem; overflow: hidden; pointer-events: none; }
+.dcm i { position: absolute; top: 0; left: 0; right: 0; height: 0; background: linear-gradient(#ffb627, #ff4d4d); }

@@ -2,7 +2,7 @@
 import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, clamp, SCL, FADER, events, onAny, ownRecent } from "./core.js";
 import { drag, tog } from "./ui.js";
 import { eqThumb, makeMeter, deskMeters, select, SCALE } from "./mix.js";
-import { openFull, openSection } from "./inspector.js";
+import { openFull, openSection, openPage, closePop, closeFull } from "./inspector.js";
 import { rtaOn } from "./eq.js";
 import { openPatch, openInsert, insLabel } from "./patchpop.js";
 import { baseOfSel } from "./follow.js";
@@ -25,16 +25,46 @@ const LEFT_NAMES = () => compact()
   ? ["CH 1-8", "CH 9-16", "CH 17-24", "CH 25-32", "Aux / USB", "FX returns", "Bus 1-8", "Bus 9-16"]
   : ["CH 1-16", "CH 17-32", "Aux / USB / FX", "Bus masters"];
 // The strips under the console's two fader banks, from the bank it reports.
-function leftBank() {
+function compactLayers() {
   const i = layerStrips("in"), a = layerStrips("aux"), b = layerStrips("bus");
-  const banks = compact()
-    ? [i.slice(0, 8), i.slice(8, 16), i.slice(16, 24), i.slice(24, 32), a.slice(0, 8), a.slice(8, 16), b.slice(0, 8), b.slice(8, 16)]
-    : [i.slice(0, 16), i.slice(16, 32), a, b];
+  return [i.slice(0, 8), i.slice(8, 16), i.slice(16, 24), i.slice(24, 32), a.slice(0, 8), a.slice(8, 16), b.slice(0, 8), b.slice(8, 16)];
+}
+function leftBank() {
+  const i = layerStrips("in");
+  const banks = compact() ? compactLayers() : [i.slice(0, 16), i.slice(16, 32), layerStrips("aux"), layerStrips("bus")];
   return banks[S.get(CH_BANK) || 0] || [];
 }
+// Compact fader extend: two input bank buttons at once put a second input layer on the right faders.
+// No document gives the OSC value for this. Assumed: a group bank value of 4 or more is input layer (value - 4).
+// The Span switch forces it: the right faders then show the layer after the left one.
+function spanLayer() {
+  if (!compact()) return -1;
+  const g = S.get(GRP_BANK) || 0, c = S.get(CH_BANK) || 0;
+  if (g >= 4) return g - 4;
+  return store.get("deskSpan", false) && c < 7 ? c + 1 : -1;
+}
 function rightBank() {
+  const sp = spanLayer();
+  if (sp >= 0) return compactLayers()[sp] || [];
   const b = layerStrips("bus");
   return [layerStrips("dca"), b.slice(0, 8), b.slice(8, 16), [...layerStrips("mtx"), "/main/m"]][S.get(GRP_BANK) || 0] || [];
+}
+const rightName = () => { const sp = spanLayer(); return sp >= 0 ? LEFT_NAMES()[sp] || "Unknown bank" : RIGHT_NAMES[S.get(GRP_BANK) || 0] || "Unknown bank"; };
+
+// Console screen: when the console opens the gate, dyn or EQ page, open the same section here.
+const SCR = "/-stat/screen/screen", CHP = "/-stat/screen/CHAN/page", SCR_PAGES = { 2: "gate", 3: "dyn", 4: "eq" };
+const screenFollow = () => !!(G.caps && G.caps.full) && store.get("deskScreenFollow", true);
+let byConsole = false;
+function screenFromConsole() {
+  if (!screenFollow()) return;
+  const want = S.get(SCR) === 0 ? SCR_PAGES[S.get(CHP)] : null;
+  if (want) {
+    if (openPage() !== want) openSection(want, null);
+    byConsole = true;
+  } else if (byConsole) {
+    byConsole = false;
+    closePop(); closeFull();
+  }
 }
 function bankSize() {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -129,13 +159,22 @@ function tag(path, label, cls) {
 }
 function dynRow(name, def, path, label, scale, gi, pageName) {
   const d = section(name, def.base, (was) => openSection(pageName, was));
-  const v = el("span", "dv"), bar = el("i", "grb");
+  const v = el("span", "dv");
   sc.on(path + "/thr", (x) => (v.textContent = scale.fmt(x ?? 0).replace(" dB", "")));
   sc.on(path + "/on", (x) => d.classList.toggle("off", !x));
   d.append(tag(path + "/on", label, name), v);
-  if (store.get("dynMeters", true)) {
-    const g = el("div", "gr"); g.append(bar); d.append(g);
-    if (gi != null) grs.push({ i: gi, bar, last: -1 });
+  // As on a DiGiCo: the gate has three lights (open, reducing, closed), the comp a gain reduction meter.
+  if (gi == null) return d;
+  if (name === "gate" && store.get("deskGateLeds", true)) {
+    const w = el("div", "dgl"), red = el("i", "r"), amb = el("i", "a"), grn = el("i", "g");
+    w.title = "Gate: green open, amber reducing, red closed";
+    w.append(red, amb, grn); d.append(w); d.classList.add("lt");
+    grs.push({ i: gi, gate: { red, amb, grn }, on: path + "/on", range: path + "/range", last: "" });
+  } else if (name === "comp" && store.get("deskCompMeter", true)) {
+    const w = el("div", "dcm"), bar = el("i");
+    w.title = "Compressor gain reduction, 0 to 24 dB";
+    w.append(bar); d.append(w); d.classList.add("lt");
+    grs.push({ i: gi, bar, last: -1 });
   }
   return d;
 }
@@ -363,7 +402,13 @@ function buildRail(n) {
     const g = el("div", "dgroup"), sd = el("select");
     g.append(el("h3", null, "Console bank"));
     if (side() !== "right") g.append(el("div", "dnow", LEFT_NAMES()[S.get(CH_BANK) || 0] || "Unknown bank"));
-    if (side() !== "left") g.append(el("div", "dnow", RIGHT_NAMES[S.get(GRP_BANK) || 0]));
+    if (side() !== "left" || spanLayer() >= 0) g.append(el("div", "dnow", rightName()));
+    if (compact()) {
+      g.append(check("Span 16 inputs", "deskSpan", store.get("deskSpan", false)));
+      const raw = el("div", "dnote", `Console values: ${S.get(CH_BANK) ?? "–"} / ${S.get(GRP_BANK) ?? "–"}`);
+      raw.title = "Bank values the console reports (left / right)";
+      g.append(raw);
+    }
     g.append(el("h3", null, "Show"));
     sd.append(new Option("Left bank", "left"), new Option("Right bank", "right"), new Option("Both banks", "both"));
     sd.value = side();
@@ -397,6 +442,7 @@ function buildRail(n) {
   fn.append(check("Hide faders", "deskScreen", screenOnly(), (on) => { if (on) G.sof = 0; }));
   if (G.caps.full) fn.append(check("Follow console bank", "deskFollow", followBank()));
   if (G.caps.full) fn.append(check("Sync select with console", "deskSelSync", selSync(), (on) => { if (on) selectFromConsole(); }));
+  if (G.caps.full) fn.append(check("Open EQ / dyn with console", "deskScreenFollow", screenFollow()));
   fn.append(check("Meters", "deskMeters", store.get("deskMeters", true)));
   fn.append(check("Aux sends", "deskSends", store.get("deskSends", true)));
   if (store.get("deskSends", true)) {
@@ -413,7 +459,11 @@ function buildRail(n) {
     fn.append(check("EQ, gate, comp in a window", "deskWindow", store.get("deskWindow", true)));
     fn.append(check("EQ RTA", "eqRta", rtaOn(), () => events.dispatchEvent(new CustomEvent("rtaopt"))));
   }
-  if (G.caps.full) fn.append(check("Gate / comp metering", "dynMeters", store.get("dynMeters", true)));
+  if (G.caps.full) {
+    fn.append(check("Gate lights", "deskGateLeds", store.get("deskGateLeds", true)));
+    fn.append(check("Comp meter", "deskCompMeter", store.get("deskCompMeter", true)));
+    fn.append(check("Gate / comp graph metering", "dynMeters", store.get("dynMeters", true)));
+  }
   if (screenOnly()) {
     const hide = el("button", null, "Hide this panel");
     hide.onclick = () => { store.set("deskRailOff", true); buildDesk(); };
@@ -453,7 +503,7 @@ export function buildDesk() {
   } else root.append(buildRail(n));
   const box = el("div", "dstrips"); box.id = "dstrips";
   if (follow) {
-    const left = side() !== "right" ? leftBank() : [], right = side() !== "left" ? rightBank() : [];
+    const left = side() !== "right" ? leftBank() : [], right = side() !== "left" || spanLayer() >= 0 ? rightBank() : [];
     for (const b of left) box.append(buildStrip(b));
     right.forEach((b, i) => { const x = buildStrip(b); if (i === 0 && left.length) x.classList.add("grpstart"); box.append(x); });
   } else {
@@ -497,9 +547,19 @@ function grLoop() {
   if (G.view !== "desk" || !G.caps || !G.caps.meters) return;
   const fresh = performance.now() - meters.at < 1000;
   for (const g of grs) {
-    const b = fresh ? meters.b[g.i] : 0;
-    const v = b > 0 ? Math.round(clamp((80 - b / 2.55) / 30) * 100) : 0;
-    if (v !== g.last) { g.last = v; g.bar.style.width = v + "%"; }
+    const b = fresh ? meters.b[g.i] : 0, gr = b > 0 ? Math.max(0, 80 - b / 2.55) : 0; // dB of gain reduction
+    if (g.gate) {
+      // Closed: at the gate range (less 1.5 dB). Reducing: 1 dB or more. Off or no data: no light.
+      const range = 3 + 57 * (S.get(g.range) ?? 1);
+      const st = !fresh || !S.get(g.on) ? "" : gr >= range - 1.5 ? "r" : gr >= 1 ? "a" : "g";
+      if (st !== g.last) {
+        g.last = st;
+        g.gate.red.classList.toggle("on", st === "r"); g.gate.amb.classList.toggle("on", st === "a"); g.gate.grn.classList.toggle("on", st === "g");
+      }
+      continue;
+    }
+    const v = Math.round(clamp(gr / 24) * 100);
+    if (v !== g.last) { g.last = v; g.bar.style.height = v + "%"; }
   }
 }
 grLoop();
@@ -511,8 +571,9 @@ addEventListener("resize", () => {
 });
 onAny((p) => {
   if (G.view === "desk" && p === SEL && !ownRecent(SEL)) queueMicrotask(selectFromConsole);
+  if (G.view === "desk" && (p === SCR || p === CHP) && !ownRecent(p)) queueMicrotask(screenFromConsole);
   if (G.view !== "desk" || !followBank()) return;
-  if ((p === CH_BANK && side() !== "right") || (p === GRP_BANK && side() !== "left")) queueMicrotask(buildDesk);
+  if (p === CH_BANK || p === GRP_BANK) queueMicrotask(buildDesk);
 });
 events.addEventListener("sources", (e) => {
   if (G.view === "desk" && JSON.stringify(e.detail) !== JSON.stringify(G.sources)) buildDesk();
