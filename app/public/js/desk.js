@@ -56,8 +56,7 @@ function rotaryFor(def) {
   return null;
 }
 
-function rotary(def) {
-  const w = el("div", "drot"), r = rotaryFor(def);
+function knobParts() {
   const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", "0 0 40 40");
   const ring = (cls) => {
@@ -71,6 +70,35 @@ function rotary(def) {
   const tick = document.createElementNS(NS, "line");
   tick.setAttribute("x1", 20); tick.setAttribute("x2", 20); tick.setAttribute("y1", 9); tick.setAttribute("y2", 15); tick.setAttribute("class", "rt");
   svg.append(back, val, knob, tick);
+  return { svg, val, tick };
+}
+
+// One send as a knob: drag sets the level, a tap turns the send on or off.
+function sendKnob(P, i, hi, title) {
+  const w = el("div", "dsk" + (hi ? " hi" : "")), { svg, val, tick } = knobParts();
+  w.title = title;
+  w.append(svg, el("span", null, i));
+  sc.on(P + "level", (v) => {
+    v = v ?? 0;
+    val.setAttribute("stroke-dasharray", `${Math.max(v * 75, .6)} 100`);
+    tick.setAttribute("transform", `rotate(${v * 270 - 135} 20 20)`);
+  });
+  sc.on(P + "on", (x) => w.classList.toggle("off", x === 0));
+  let moved = false;
+  drag(w, { get: () => S.get(P + "level") ?? 0, put: (v) => { moved = true; set(P + "level", v); }, axis: "y", span: () => 220 });
+  w.addEventListener("click", (e) => {
+    if (document.body.classList.contains("learning")) return;
+    e.stopPropagation();
+    if (moved) { moved = false; return; }
+    set(P + "on", S.get(P + "on") === 0 ? 1 : 0);
+  });
+  return w;
+}
+const sendStyle = () => store.get("deskSendStyle", "bars");
+
+function rotary(def) {
+  const w = el("div", "drot"), r = rotaryFor(def);
+  const { svg, val, tick } = knobParts();
   const txt = el("span", "rval", "–");
   w.append(svg, txt);
   if (!r) { w.classList.add("off"); return w; }
@@ -244,15 +272,24 @@ function buildStrip(base, master) {
   const showSends = store.get("deskSends", true);
   if (has.sends && showSends) {
     const toMtx = ["bus", "st"].includes(k), n = toMtx ? 6 : G.caps.bus, d = section("send", base, () => openFull("sends"));
-    const g = el("div", "dsg"); g.style.setProperty("--n", n > 8 ? 8 : n);
     const hi = rotFn().startsWith("send:") && !toMtx ? +rotFn().slice(5) : 0;
-    for (let i = 1; i <= n; i++) {
-      const P = `${base}/mix/${pad(i)}/`, c = el("span", i === hi ? "hi" : ""), f = el("i"); c.append(f);
-      sc.on(P + "level", (x) => (f.style.height = (x ?? 0) * 100 + "%"));
-      sc.on(P + "on", (x) => c.classList.toggle("off", x === 0));
-      g.append(c);
+    if (sendStyle() === "bars") {
+      const g = el("div", "dsg"); g.style.setProperty("--n", n > 8 ? 8 : n);
+      for (let i = 1; i <= n; i++) {
+        const P = `${base}/mix/${pad(i)}/`, c = el("span", i === hi ? "hi" : ""), f = el("i"); c.append(f);
+        sc.on(P + "level", (x) => (f.style.height = (x ?? 0) * 100 + "%"));
+        sc.on(P + "on", (x) => c.classList.toggle("off", x === 0));
+        g.append(c);
+      }
+      d.append(g);
+    } else {
+      // A tap on the header opens the sends page.
+      const from = sendStyle() === "k2" && !toMtx && n > 8 ? 9 : 1, to = Math.min(n, from + 7), kg = el("div", "dskg");
+      for (let i = from; i <= to; i++) kg.append(sendKnob(`${base}/mix/${pad(i)}/`, i, i === hi, toMtx ? `Matrix ${i}` : S.get(`/bus/${pad(i)}/config/name`) || `Bus ${i}`));
+      d.classList.add("knobs");
+      d.append(el("div", "dskh", `${toMtx ? "MTX" : "AUX"} ${from}-${to}`), kg);
     }
-    d.append(g); scr.append(d);
+    scr.append(d);
   } else if (showSends) scr.append(none("send"));
 
   if (has.pan && !isSof) {
@@ -359,6 +396,16 @@ function buildRail(n) {
   if (G.caps.full) fn.append(check("Follow console bank", "deskFollow", followBank()));
   fn.append(check("Meters", "deskMeters", store.get("deskMeters", true)));
   fn.append(check("Aux sends", "deskSends", store.get("deskSends", true)));
+  if (store.get("deskSends", true)) {
+    const st = el("select");
+    st.title = "How the strip shows aux sends";
+    st.append(new Option("Aux: bars", "bars"), new Option("Aux: knobs 1-8", "k1"));
+    if (G.caps.bus > 8) st.append(new Option("Aux: knobs 9-16", "k2"));
+    st.value = sendStyle();
+    if (st.value !== sendStyle()) st.value = "k1";
+    st.onchange = () => { store.set("deskSendStyle", st.value); buildDesk(); };
+    fn.append(st);
+  }
   if (G.caps.full) {
     fn.append(check("EQ, gate, comp in a window", "deskWindow", store.get("deskWindow", true)));
     fn.append(check("EQ RTA", "eqRta", rtaOn(), () => events.dispatchEvent(new CustomEvent("rtaopt"))));

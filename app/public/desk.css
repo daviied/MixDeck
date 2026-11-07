@@ -100,17 +100,17 @@ button.dt.ins.on { background: #c58bff; }
 .strip.dstrip.grpstart { border-left: .2rem solid var(--acc); }
 .drailtab { flex: 0 0 1.4rem; align-self: stretch; padding: 0; min-height: 0; background: #1b1d20; border: 1px solid #000; border-radius: .25rem; color: var(--dim); }
 .screen .dscreen { flex: 1; min-height: 0; overflow-y: auto; border-bottom: 0; scrollbar-width: none; }
-.screen .ds-src { height: 1.7rem; }
-.screen .ds-gain { height: 3.6rem; }
+/* Every row grows in proportion to its size, so the column fills the full height. */
+.screen .ds-src { flex: 1.7 0 1.7rem; height: auto; }
+.screen .ds-gain { flex: 3.6 0 3.6rem; height: auto; }
 .screen .dgv { font-size: 1rem; }
-.screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { height: 2.5rem; flex-direction: column; align-items: stretch; justify-content: center; gap: .12rem; padding-block: .1rem .24rem; }
+.screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { flex: 2.5 0 2.5rem; height: auto; flex-direction: column; align-items: stretch; justify-content: center; gap: .12rem; padding-block: .1rem .24rem; }
 .screen .dv { font-size: .72rem; flex: none; }
 .screen button.dt { min-height: 1.15rem; }
-/* Fixed heights: only the meters take spare height. Pan and name stay at the bottom. */
-.screen .ds-eq { flex: none; height: 4.5rem; }
-.screen .ds-send { flex: none; height: 3rem; }
-.screen .ds-pan { height: 1.4rem; margin-top: auto; }
-.screen .ds-lvl { flex: 3 0 6rem; height: auto; align-items: stretch; gap: .25rem; padding: .25rem .18rem; }
+.screen .ds-eq { flex: 4.5 0 4.5rem; height: auto; }
+.screen .ds-send { flex: 3 0 3rem; height: auto; }
+.screen .ds-pan { flex: 1.4 0 1.4rem; height: auto; }
+.screen .ds-lvl { flex: 8 0 6rem; height: auto; align-items: stretch; gap: .25rem; padding: .25rem .18rem; }
 .ds-lvl { height: 3.4rem; align-items: stretch; justify-content: center; padding: .2rem .18rem; }
 .dlm { flex: none; display: flex; gap: .12rem; }
 .dlm .mtr { width: .5rem; }
@@ -119,7 +119,7 @@ button.dt.ins.on { background: #c58bff; }
 .dbadge { display: block; font-size: .56rem; font-weight: 800; padding: .14rem 0; border-radius: .14rem; background: #101317; color: #5d6771; }
 .dbadge.bm.on { background: var(--mute); color: #fff; }
 .dbadge.bs.on { background: var(--solo); color: #1a1100; }
-.screen .ds-name { height: 2.6rem; flex: none; }
+.screen .ds-name { flex: 2.6 0 2.6rem; height: auto; }
 .screen .ds-name b { font-size: .84rem; }
 .strip.dstrip.muted .ds-name { border-top-color: var(--mute); }
 @media (max-height: 760px) {
@@ -152,18 +152,19 @@ button.dt.ins.on { background: #c58bff; }
 }
 /* Short screens: keep every row of the screen in view */
 @media (max-height: 760px) {
-  .screen .ds-lvl { flex: 3 0 3.5rem; }
-  .screen .ds-src { height: 1.4rem; }
-  .screen .ds-gain { height: 2.6rem; }
-  .screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { height: 2.1rem; padding-block: .05rem .2rem; gap: .05rem; }
-  .screen .ds-eq { height: 2.5rem; }
-  .screen .ds-send { height: 1.5rem; }
-  .screen .ds-name { height: 2.2rem; }
-  .screen .ds-pan { height: 1.2rem; }
+  .screen .ds-lvl { flex: 8 0 3.5rem; }
+  .screen .ds-src { flex-basis: 1.4rem; }
+  .screen .ds-gain { flex-basis: 2.6rem; }
+  .screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { flex-basis: 2.1rem; padding-block: .05rem .2rem; gap: .05rem; }
+  .screen .ds-eq { flex-basis: 2.5rem; }
+  .screen .ds-send { flex-basis: 1.5rem; }
+  .screen .ds-name { flex-basis: 2.2rem; }
+  .screen .ds-pan { flex-basis: 1.2rem; }
   .screen button.dt { min-height: 1rem; }
 }
 /* Meters off: the row holds only level, mute and solo */
-.ds-lvl.nom, .screen .ds-lvl.nom { flex: none; height: 3.2rem; }
+.ds-lvl.nom { flex: none; height: 3.2rem; }
+.screen .ds-lvl.nom { flex: 3.2 0 3.2rem; height: auto; }
 .ds-lvl.nom, .screen .ds-lvl.nom { height: 3.8rem; }
 .ds-lvl.nom .dli { justify-content: center; }
 /* Window beside the channel strip */
@@ -186,3 +187,19 @@ button.dt.ins.on { background: #c58bff; }
 .dgi.inv.on { background: #ffb627; color: #1a1100; }
 /* Rename field over the channel name */
 #dname { position: fixed; z-index: 60; width: 9rem; height: 2.4rem; padding: 0 .4rem; font-size: max(16px, .84rem); font-weight: 700; color: #fff; background: #05080b; border: 2px solid var(--acc); border-radius: .25rem; }
+/* Aux knobs */
+.ds-send.knobs, #v-desk:not(.screen) .ds-send.knobs { height: auto; flex-direction: column; align-items: stretch; gap: .1rem; padding: .1rem .12rem .15rem; }
+.screen .ds-send.knobs { flex: 8 0 auto; justify-content: center; }
+.dskh { font-size: .56rem; font-weight: 800; color: #9fd0ff; text-align: center; line-height: 1.4; }
+.dskg { display: grid; grid-template-columns: repeat(auto-fill, minmax(1.7rem, 1fr)); gap: .1rem; justify-items: center; }
+.dsk { position: relative; width: 100%; max-width: 2.3rem; aspect-ratio: 1; cursor: ns-resize; touch-action: none; }
+.dsk svg { display: block; width: 100%; height: 100%; }
+.dsk circle { fill: none; }
+.dsk circle.rk { fill: #0e0f11; stroke: #3b3f45; stroke-width: 1; }
+.dsk span { position: absolute; inset: 0; display: grid; place-items: center; font-size: .56rem; font-weight: 700; color: #dde6ee; pointer-events: none; }
+.dsk.off .rv { stroke: #4a525c; filter: none; }
+.dsk.off span { color: #5d6771; }
+.dsk.hi circle.rk { stroke: #ffd27a; }
+/* Selected channel: a frame and tint over the whole strip */
+.strip.dstrip { position: relative; }
+.strip.dstrip.sel::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border: 2px solid var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
