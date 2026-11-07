@@ -1,5 +1,5 @@
 // Mix page: layer bar, strips, master section, meters.
-import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, events, emit, clamp } from "./core.js";
+import { S, G, $, el, set, write, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, events, emit, clamp } from "./core.js";
 import { drag } from "./ui.js";
 import { curve, bandCount } from "./eq.js";
 import { midi } from "./midi.js";
@@ -141,7 +141,8 @@ export function select(base, openSheet) {
   document.querySelectorAll(".strip.sel").forEach((x) => x.classList.remove("sel"));
   document.querySelectorAll(`.strip[data-base="${base}"]`).forEach((x) => x.classList.add("sel"));
   const def = stripDef(base);
-  if (store.get("syncSel", false) && G.caps.full && def) set("/-stat/selidx", def.sel);
+  const sync = store.get("syncSel", false) || (G.view === "desk" && store.get("deskSelSync", true));
+  if (sync && G.caps.full && def && S.get("/-stat/selidx") !== def.sel) write("/-stat/selidx", def.sel);
   emit("select", { openSheet });
 }
 

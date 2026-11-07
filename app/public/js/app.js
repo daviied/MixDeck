@@ -5,7 +5,7 @@ import { buildInspector, initInspector, closePop } from "./inspector.js";
 import { buildFx, buildScenes, buildLink, buildSettings, applyDisplay } from "./pages.js";
 import { buildMidi, initMidi, midi } from "./midi.js";
 import { pr } from "./ui.js";
-import { buildDesk } from "./desk.js";
+import { buildDesk, selectFromConsole } from "./desk.js";
 import { isFollow, followTabs, enterFollow, exitFollow, initFollow, buildFollowPage } from "./follow.js";
 
 const ICON = {
@@ -29,7 +29,7 @@ function drawNav() {
     b.append(t); b.onclick = () => go(k); n.append(b);
   }
 }
-const BUILD = { mix: () => { buildMix(); buildInspector({}); }, desk: () => { buildMix(); buildDesk(); }, fx: buildFx, scenes: buildScenes, link: buildLink, midi: buildMidi, settings: buildSettings, patch: () => {}, follow: buildFollowPage };
+const BUILD = { mix: () => { buildMix(); buildInspector({}); }, desk: () => { buildMix(); selectFromConsole(); buildDesk(); }, fx: buildFx, scenes: buildScenes, link: buildLink, midi: buildMidi, settings: buildSettings, patch: () => {}, follow: buildFollowPage };
 function go(v) {
   if (v !== "desk") closePop();
   G.view = v; if (!isFollow()) store.set("view", v);

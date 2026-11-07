@@ -1,10 +1,11 @@
 // DiGiCo-style desk: fader banks, one touch column per channel, a rotary per fader.
-import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, clamp, SCL, FADER, events, onAny } from "./core.js";
+import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, clamp, SCL, FADER, events, onAny, ownRecent } from "./core.js";
 import { drag, tog } from "./ui.js";
 import { eqThumb, makeMeter, deskMeters, select, SCALE } from "./mix.js";
 import { openFull, openSection } from "./inspector.js";
 import { rtaOn } from "./eq.js";
 import { openPatch, openInsert, insLabel } from "./patchpop.js";
+import { baseOfSel } from "./follow.js";
 
 const LAYERS = [["in", "Inputs"], ["aux", "Aux / FX"], ["bus", "Buses"], ["mtx", "Matrix"], ["dca", "DCA"], ["fav", "★"]];
 const pad = (n, w = 2) => String(n).padStart(w, "0");
@@ -15,7 +16,8 @@ const isPhone = () => innerWidth <= 760;
 const screenOnly = () => store.get("deskScreen", false);
 const followBank = () => !!(G.caps && G.caps.full) && store.get("deskFollow", false);
 const side = () => store.get("deskSide", "left");
-const CH_BANK = "/-stat/chfaderbank", GRP_BANK = "/-stat/grpfaderbank";
+const CH_BANK = "/-stat/chfaderbank", GRP_BANK = "/-stat/grpfaderbank", SEL = "/-stat/selidx";
+const selSync = () => !!(G.caps && G.caps.full) && store.get("deskSelSync", true);
 const RIGHT_NAMES = ["DCA 1-8", "Bus 1-8", "Bus 9-16", "Matrix, M/C"];
 // Standard: 16 input faders. Compact: 8 input faders, so more layers. The right bank is the same on both.
 const compact = () => !!(G.caps && G.caps.type === "x32") && store.get("deskModel", "x32") === "compact";
@@ -394,6 +396,7 @@ function buildRail(n) {
   }
   fn.append(check("Hide faders", "deskScreen", screenOnly(), (on) => { if (on) G.sof = 0; }));
   if (G.caps.full) fn.append(check("Follow console bank", "deskFollow", followBank()));
+  if (G.caps.full) fn.append(check("Sync select with console", "deskSelSync", selSync(), (on) => { if (on) selectFromConsole(); }));
   fn.append(check("Meters", "deskMeters", store.get("deskMeters", true)));
   fn.append(check("Aux sends", "deskSends", store.get("deskSends", true)));
   if (store.get("deskSends", true)) {
@@ -472,6 +475,23 @@ export function buildDesk() {
   root.querySelectorAll(`.strip[data-base="${G.selected}"]`).forEach((x) => x.classList.add("sel"));
 }
 
+// Select the channel the console has selected. With manual banks, also go to the bank that holds it.
+export function selectFromConsole() {
+  const i = S.get(SEL);
+  if (!selSync() || i == null) return;
+  const b = baseOfSel(i);
+  if (!stripDef(b)) return;
+  if (b !== G.selected) select(b);
+  if (followBank() || G.view !== "desk") return;
+  for (const [k] of LAYERS) {
+    const at = k === "fav" ? -1 : listOf(k).indexOf(b);
+    if (at < 0) continue;
+    const pg = Math.floor(at / (lastN || bankSize()));
+    if (k !== layer || pg !== page) { layer = k; page = pg; store.set("deskLayer", k); store.set("deskPage", pg); buildDesk(); }
+    return;
+  }
+}
+
 function grLoop() {
   requestAnimationFrame(grLoop);
   if (G.view !== "desk" || !G.caps || !G.caps.meters) return;
@@ -490,6 +510,7 @@ addEventListener("resize", () => {
   if (n !== lastN) { page = Math.floor((page * lastN) / n); buildDesk(); }
 });
 onAny((p) => {
+  if (G.view === "desk" && p === SEL && !ownRecent(SEL)) queueMicrotask(selectFromConsole);
   if (G.view !== "desk" || !followBank()) return;
   if ((p === CH_BANK && side() !== "right") || (p === GRP_BANK && side() !== "left")) queueMicrotask(buildDesk);
 });
