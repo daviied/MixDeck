@@ -50,6 +50,7 @@ class Console:
         self.reading = False
         self.meter_clients = 0
         self.meter_bytes = b""
+        self.rta_bytes = b""
 
     # -- to implement --
     connected = False

@@ -205,7 +205,7 @@ export function followCards(page, def) {
 const FULL = [["main", "Channel"], ["config", "Input"], ["gate", "Gate"], ["dyn", "Comp"], ["eq", "EQ"], ["sends", "Sends"]];
 const CARD_PAGE = { Channel: "main", Input: "config", Gate: "gate", Comp: "dyn", EQ: "eq", Sends: "sends" };
 let full = null;
-const fullKey = (e) => { if (e.key === "Escape" && !document.querySelector(".pp")) { e.preventDefault(); e.stopPropagation(); closeFull(); } };
+const fullKey = (e) => { if (e.key === "Escape" && e.target.tagName !== "INPUT" && !document.querySelector(".pp")) { e.preventDefault(); e.stopPropagation(); closeFull(); } };
 function pagesFor(k) {
   return FULL.filter(([p]) => ({
     main: true, config: k === "ch" || k === "auxin", gate: k === "ch",
@@ -244,6 +244,7 @@ function drawFull() {
   scrollLoad(o, keep);
 }
 export function openFull(page) {
+  closePop();
   if (full) closeFull();
   full = page;
   const o = el("div", "fullc"); o.id = "fullc"; $("#app").append(o);
@@ -258,7 +259,62 @@ function closeFull() {
   buildInspector({});
 }
 
+// DiGiCo view: a small window beside the channel strip, not full screen.
+const POP = [["gate", "Gate"], ["dyn", "Comp"], ["eq", "EQ"]];
+let pop = null;
+const popKey = (e) => { if (e.key === "Escape" && e.target.tagName !== "INPUT" && !document.querySelector(".pp")) { e.preventDefault(); e.stopPropagation(); closePop(); } };
+export function placePop() {
+  const o = $("#dpop"); if (!o) return;
+  const strip = document.querySelector(`#dstrips .strip[data-base="${G.selected}"], #dmasters .strip[data-base="${G.selected}"]`);
+  if (!strip) return;
+  const r = strip.getBoundingClientRect(), w = o.offsetWidth, h = o.offsetHeight;
+  let x = r.right + 6; if (x + w > innerWidth - 4) x = r.left - w - 6;
+  o.style.left = Math.max(4, x) + "px";
+  o.style.top = Math.max(4, Math.min(r.top, innerHeight - h - 4)) + "px";
+}
+function drawPop() {
+  const def = stripDef(G.selected);
+  if (!def || !G.caps || !G.caps.full) return closePop();
+  const pages = POP.filter(([p]) => pagesFor(def.kind).some(([q]) => q === p));
+  if (!pages.length) return closePop();
+  if (!pages.some(([p]) => p === pop)) pop = pages[0][0];
+  const o = $("#dpop"); o.innerHTML = ""; o.className = "dpop dpop-" + pop; o.dataset.base = def.base;
+  const bar = el("div", "dpopbar"), seg = el("div", "seg");
+  pages.forEach(([p, t]) => {
+    const b = el("button", p === pop ? "on" : "", t);
+    b.onclick = () => { pop = p; drawPop(); };
+    seg.append(b);
+  });
+  const nm = S.get(def.base + "/config/name"), x = el("button", "dpopx", "✕");
+  x.title = "Close (Esc)"; x.onclick = closePop;
+  const title = el("b", null, def.label + (nm ? ` · ${nm}` : ""));
+  bar.append(title, seg, x);
+  o.append(bar, followCards(pop, def));
+  sc.on(def.base + "/config/name", (v) => (title.textContent = def.label + (v ? ` · ${v}` : "")));
+  placePop();
+}
+export function closePop() {
+  if (!pop) return;
+  pop = null; $("#dpop")?.remove();
+  document.removeEventListener("keydown", popKey, true);
+  disposeCards();
+}
+// was: the channel selected before this tap. A second tap on the same section closes the window.
+export function openSection(page, was) {
+  if (!store.get("deskWindow", true) || innerWidth <= 760) return openFull(page);
+  if (pop === page && was === G.selected) return closePop();
+  if (full) closeFull();
+  if (!pop) {
+    const o = el("div", "dpop"); o.id = "dpop"; $("#app").append(o);
+    document.addEventListener("keydown", popKey, true);
+  }
+  pop = page;
+  drawPop();
+}
+addEventListener("resize", placePop);
+
 export function buildInspector(e) {
+  if (pop) return drawPop();
   if (full) return drawFull();
   if (G.view !== "mix") return;
   sc.dispose(); sc = scope();

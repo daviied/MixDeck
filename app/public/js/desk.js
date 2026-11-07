@@ -1,8 +1,9 @@
 // DiGiCo-style desk: fader banks, one touch column per channel, a rotary per fader.
-import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, clamp, SCL, FADER, events } from "./core.js";
+import { S, G, $, el, set, scope, stripDef, layerStrips, stripColor, fmtDb, db2f, meters, faderPath, onPath, store, clamp, SCL, FADER, events, onAny } from "./core.js";
 import { drag, tog } from "./ui.js";
 import { eqThumb, makeMeter, deskMeters, select, SCALE } from "./mix.js";
-import { openFull } from "./inspector.js";
+import { openFull, openSection } from "./inspector.js";
+import { rtaOn } from "./eq.js";
 import { openPatch, openInsert, insLabel } from "./patchpop.js";
 
 const LAYERS = [["in", "Inputs"], ["aux", "Aux / FX"], ["bus", "Buses"], ["mtx", "Matrix"], ["dca", "DCA"], ["fav", "★"]];
@@ -11,6 +12,20 @@ let sc = scope(), layer = store.get("deskLayer", "in"), page = store.get("deskPa
 let grs = [];
 
 const isPhone = () => innerWidth <= 760;
+const screenOnly = () => store.get("deskScreen", false);
+const followBank = () => !!(G.caps && G.caps.full) && store.get("deskFollow", false);
+const side = () => store.get("deskSide", "left");
+const CH_BANK = "/-stat/chfaderbank", GRP_BANK = "/-stat/grpfaderbank";
+const LEFT_NAMES = ["CH 1-16", "CH 17-32", "Aux / USB / FX", "Bus masters"], RIGHT_NAMES = ["DCA 1-8", "Bus 1-8", "Bus 9-16", "Matrix, M/C"];
+// The strips under the console's two fader banks, from the bank it reports.
+function leftBank() {
+  const i = layerStrips("in"), b = layerStrips("bus");
+  return [i.slice(0, 16), i.slice(16, 32), layerStrips("aux"), b][S.get(CH_BANK) || 0] || [];
+}
+function rightBank() {
+  const b = layerStrips("bus");
+  return [layerStrips("dca"), b.slice(0, 8), b.slice(8, 16), [...layerStrips("mtx"), "/main/m"]][S.get(GRP_BANK) || 0] || [];
+}
 function bankSize() {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
   const side = isPhone() ? 0 : (7.5 + (G.caps && G.caps.mono ? 2 : 1) * 5.6) * rem;
@@ -65,7 +80,7 @@ function rotary(def) {
 // One touch section. A tap selects the channel and runs the action.
 function section(name, base, act) {
   const d = el("div", "ds ds-" + name);
-  if (act) { d.classList.add("tap"); d.onclick = () => { if (document.body.classList.contains("learning")) return; select(base); act(); }; }
+  if (act) { d.classList.add("tap"); d.onclick = () => { if (document.body.classList.contains("learning")) return; const was = G.selected; select(base); act(was); }; }
   return d;
 }
 const none = (name) => el("div", `ds ds-${name} none`);
@@ -75,14 +90,68 @@ function tag(path, label, cls) {
   return t;
 }
 function dynRow(name, def, path, label, scale, gi, pageName) {
-  const d = section(name, def.base, () => openFull(pageName));
+  const d = section(name, def.base, (was) => openSection(pageName, was));
   const v = el("span", "dv"), bar = el("i", "grb");
   sc.on(path + "/thr", (x) => (v.textContent = scale.fmt(x ?? 0).replace(" dB", "")));
   sc.on(path + "/on", (x) => d.classList.toggle("off", !x));
   d.append(tag(path + "/on", label, name), v);
-  const g = el("div", "gr"); g.append(bar); d.append(g);
-  if (gi != null) grs.push({ i: gi, bar, last: -1 });
+  if (store.get("dynMeters", true)) {
+    const g = el("div", "gr"); g.append(bar); d.append(g);
+    if (gi != null) grs.push({ i: gi, bar, last: -1 });
+  }
   return d;
+}
+
+// The X32 has one insert per channel, pre or post. The row you pick is where it goes.
+function insRow(base, pos, label) {
+  const P = base + "/insert/", here = () => (S.get(P + "pos") ?? 0) === pos;
+  const d = section("ins", base, () => {
+    const was = here();
+    if (!was) set(P + "pos", pos);
+    if (was || !S.get(P + "sel")) openInsert(base);
+  });
+  const t = el("button", "dt ins", label), v = el("span", "dv");
+  t.title = `Insert ${label.toLowerCase()}`;
+  t.onclick = (e) => {
+    e.stopPropagation();
+    select(base);
+    if (!S.get(P + "sel")) { set(P + "pos", pos); openInsert(base); return; }
+    if (here()) set(P + "on", S.get(P + "on") ? 0 : 1);
+    else { set(P + "pos", pos); set(P + "on", 1); }
+  };
+  const draw = () => {
+    const h = here();
+    d.classList.toggle("active", h); d.classList.toggle("off", !h);
+    t.classList.toggle("on", h && !!S.get(P + "on"));
+    v.textContent = h ? insLabel(S.get(P + "sel")) || "None" : "–";
+  };
+  for (const k of ["pos", "on", "sel"]) sc.on(P + k, draw);
+  d.append(t, v);
+  return d;
+}
+
+function rename(host, def) {
+  if ($("#dname")) return;
+  const path = def.base + "/config/name", i = el("input"), r = host.getBoundingClientRect();
+  i.id = "dname"; i.maxLength = G.caps.type === "x32" ? 12 : 32;
+  i.value = S.get(path) || ""; i.placeholder = def.label; i.setAttribute("aria-label", `Name of ${def.label}`);
+  document.body.append(i);
+  i.style.left = Math.max(4, Math.min(r.left, innerWidth - i.offsetWidth - 4)) + "px";
+  i.style.top = r.top + (r.height - i.offsetHeight) / 2 + "px";
+  let done = false;
+  const end = (save) => {
+    if (done) return;
+    done = true;
+    if (save && i.value !== (S.get(path) || "")) set(path, i.value);
+    i.remove();
+  };
+  i.onblur = () => end(true);
+  i.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") end(true);
+    if (e.key === "Escape") end(false);
+  };
+  i.focus(); i.select();
 }
 
 function buildStrip(base, master) {
@@ -100,6 +169,28 @@ function buildStrip(base, master) {
   };
   const e = G.sources[base] || {}, scr = el("div", "dscreen");
 
+  // Meters first. Without faders, this row also shows level, mute and solo.
+  const lvl = el("div", "ds ds-lvl"), showM = store.get("deskMeters", true);
+  if (showM) {
+    const mw = el("div", "dlm");
+    def.meter.forEach((i) => mw.append(makeMeter(G.caps.meters && !isSof ? i : null, deskMeters)));
+    if (!def.meter.length) mw.append(makeMeter(null, deskMeters));
+    lvl.append(mw);
+  } else lvl.classList.add("nom");
+  if (screenOnly()) {
+    const info = el("div", "dli"), fv = el("b", "dlv"), m = el("span", "dbadge bm", "M");
+    sc.on(fp, (v) => (fv.textContent = fmtDb(v ?? 0)));
+    sc.on(op, (v) => { const x = v === 0; m.classList.toggle("on", x); s.classList.toggle("muted", x); });
+    info.append(fv, m);
+    if (full) {
+      const sp = `/-stat/solosw/${pad(def.solo)}`, so = el("span", "dbadge bs", "S");
+      sc.on(sp, (v) => so.classList.toggle("on", !!v));
+      info.append(so);
+    }
+    lvl.append(info);
+  }
+  if (showM || screenOnly()) scr.append(lvl);
+
   // Source: the tap patches this input, as on the desk.
   if (has.input && e.src) {
     const d = section("src", base, () => openPatch(base));
@@ -108,21 +199,19 @@ function buildStrip(base, master) {
     scr.append(d);
   } else scr.append(none("src"));
 
-  // Gain, 48 V, phase
+  // Gain, with 48 V and phase state. A tap opens the input menu.
   if (has.input) {
     const d = section("gain", base, () => openFull("config")), v = el("div", "dgv");
     const gp = e.ha != null ? `/headamp/${pad(e.ha, 3)}/` : null;
     const path = gp ? gp + "gain" : base + "/preamp/trim", scale = gp ? SCL.ha : SCL.trim;
-    sc.on(path, (x) => (v.textContent = scale.fmt(x ?? 0)));
+    sc.on(path, (x) => (v.textContent = scale.fmt(x ?? 0).replace(" dB", "")));
     let moved = false;
     drag(v, { get: () => S.get(path) ?? 0, put: (x) => { moved = true; set(path, x); }, axis: "y", span: () => 220 });
     v.addEventListener("click", (ev) => { if (moved) { ev.stopPropagation(); moved = false; } });
-    const r = el("div", "dgb");
-    if (gp) {
-      const pt = tog(sc, gp + "phantom", "48V", "dt p48", { confirm: "Tap again to turn on 48 V phantom power" });
-      pt.addEventListener("click", (ev) => ev.stopPropagation()); r.append(pt);
-    }
-    r.append(tag(base + "/preamp/invert", "Ø", "inv"));
+    // 48 V and phase are set in the menu. Here they only show state.
+    const r = el("div", "dgb"), ind = (p, t, c) => { const i = el("span", "dgi " + c, t); sc.on(p, (x) => i.classList.toggle("on", !!x)); r.append(i); };
+    if (gp) ind(gp + "phantom", "48V", "p48");
+    ind(base + "/preamp/invert", "Ø", "inv");
     d.append(v, r); scr.append(d);
   } else scr.append(none("gain"));
 
@@ -132,22 +221,20 @@ function buildStrip(base, master) {
     d.append(tag(base + "/preamp/hpon", "HPF", "hpf"), v); scr.append(d);
   } else scr.append(none("hpf"));
 
+  scr.append(has.ins ? insRow(base, 0, "PRE") : none("ins"));
+
   if (has.eq) {
-    const d = section("eq", base, () => openFull("eq"));
+    const d = section("eq", base, (was) => openSection("eq", was));
     sc.on(base + "/eq/on", (x) => d.classList.toggle("off", !x));
     d.append(tag(base + "/eq/on", "EQ", "eq"), eqThumb(sc, base, def)); scr.append(d);
   } else scr.append(none("eq"));
 
   scr.append(has.gate ? dynRow("gate", def, base + "/gate", "GATE", SCL.gthr, def.gate, "gate") : none("gate"));
   scr.append(has.comp ? dynRow("comp", def, base + "/dyn", "COMP", SCL.thr, def.gr, "dyn") : none("comp"));
+  scr.append(has.ins ? insRow(base, 1, "POST") : none("ins"));
 
-  if (has.ins) {
-    const d = section("ins", base, () => openInsert(base)), v = el("span", "dv");
-    sc.on(base + "/insert/sel", (x) => (v.textContent = insLabel(x) || "None"));
-    d.append(tag(base + "/insert/on", "INS", "ins"), v); scr.append(d);
-  } else scr.append(none("ins"));
-
-  if (has.sends) {
+  const showSends = store.get("deskSends", true);
+  if (has.sends && showSends) {
     const toMtx = ["bus", "st"].includes(k), n = toMtx ? 6 : G.caps.bus, d = section("send", base, () => openFull("sends"));
     const g = el("div", "dsg"); g.style.setProperty("--n", n > 8 ? 8 : n);
     const hi = rotFn().startsWith("send:") && !toMtx ? +rotFn().slice(5) : 0;
@@ -158,7 +245,7 @@ function buildStrip(base, master) {
       g.append(c);
     }
     d.append(g); scr.append(d);
-  } else scr.append(none("send"));
+  } else if (showSends) scr.append(none("send"));
 
   if (has.pan && !isSof) {
     const pp = base + "/mix/pan", d = el("div", "ds ds-pan"), bar = el("i"), v = el("span", "dpv");
@@ -167,15 +254,20 @@ function buildStrip(base, master) {
     d.append(bar, v); scr.append(d);
   } else scr.append(none("pan"));
 
-  // Name: the first tap selects, the next one opens the channel.
+  // Name: the first tap selects, the next one renames.
   const nm = section("name", base, null);
   nm.classList.add("tap");
-  nm.onclick = () => { if (G.selected === base && k !== "dca") openFull("main"); else select(base); };
+  nm.onclick = () => {
+    if (G.selected !== base) return select(base);
+    if (!document.body.classList.contains("learning")) rename(nm, def);
+  };
   const nmt = el("b");
-  sc.on(base + "/config/name", (v) => (nmt.textContent = v || (k === "st" ? "Main" : "")));
-  nm.append(el("span", "dn", isSof ? `→ Bus ${G.sof}` : def.label), nmt);
+  sc.on(base + "/config/name", (v) => (nmt.textContent = v || (k === "st" ? "Main" : def.label)));
+  if (isSof) nm.append(el("span", "dn", `→ Bus ${G.sof}`));
+  nm.append(nmt);
   scr.append(nm);
   s.append(scr);
+  if (screenOnly()) return s;
 
   // Worksurface: rotary, buttons, fader
   const pn = el("div", "dpanel");
@@ -201,9 +293,6 @@ function buildStrip(base, master) {
   const track = el("div", "track"), zero = el("div", "zero"), cap = el("div", "cap");
   zero.style.bottom = db2f(0) * 100 + "%"; track.append(zero, cap);
   fz.append(scale, track);
-  const mOn = G.caps.meters && !isSof;
-  def.meter.forEach((i) => fz.append(makeMeter(mOn ? i : null, deskMeters)));
-  if (!def.meter.length) fz.append(makeMeter(null, deskMeters));
   pn.append(fz);
   const fv = el("div", "fv");
   sc.on(fp, (v) => { v = v ?? 0; cap.style.bottom = v * 100 + "%"; fv.textContent = fmtDb(v); });
@@ -213,37 +302,73 @@ function buildStrip(base, master) {
   return s;
 }
 
+function check(label, key, val, fn) {
+  const w = el("label", "dchk"), c = el("input");
+  c.type = "checkbox"; c.checked = !!val;
+  c.onchange = () => { store.set(key, c.checked); if (fn) fn(c.checked); buildDesk(); };
+  w.append(c, label);
+  return w;
+}
+
 function buildRail(n) {
   const rail = el("div", "drail"), banks = el("div", "dbanks");
-  for (const [k, t] of LAYERS) {
-    const list = listOf(k);
-    if (!list.length) continue;
-    const g = el("div", "dgroup"); g.append(el("h3", null, t));
-    for (let i = 0; i * n < list.length; i++) {
-      const part = list.slice(i * n, (i + 1) * n), a = stripDef(part[0]), z = stripDef(part[part.length - 1]);
-      const label = part.length === 1 ? a.label : a.kind === z.kind ? `${a.label.replace(/\d+$/, "")}${a.n}-${z.n}` : `${a.label}…${z.label}`;
-      const b = el("button", k === layer && i === page ? "on" : "", k === "fav" ? `${i + 1}` : label);
-      b.onclick = () => { layer = k; page = i; store.set("deskLayer", k); store.set("deskPage", i); buildDesk(); };
-      g.append(b);
-    }
+  if (followBank()) {
+    const g = el("div", "dgroup"), sd = el("select");
+    g.append(el("h3", null, "Console bank"));
+    if (side() !== "right") g.append(el("div", "dnow", LEFT_NAMES[S.get(CH_BANK) || 0]));
+    if (side() !== "left") g.append(el("div", "dnow", RIGHT_NAMES[S.get(GRP_BANK) || 0]));
+    g.append(el("h3", null, "Show"));
+    sd.append(new Option("Left bank", "left"), new Option("Right bank", "right"), new Option("Both banks", "both"));
+    sd.value = side();
+    sd.onchange = () => { store.set("deskSide", sd.value); buildDesk(); };
+    g.append(sd);
     banks.append(g);
+  } else {
+    for (const [k, t] of LAYERS) {
+      const list = listOf(k);
+      if (!list.length) continue;
+      const g = el("div", "dgroup"); g.append(el("h3", null, t));
+      for (let i = 0; i * n < list.length; i++) {
+        const part = list.slice(i * n, (i + 1) * n), a = stripDef(part[0]), z = stripDef(part[part.length - 1]);
+        const label = part.length === 1 ? a.label : a.kind === z.kind ? `${a.label.replace(/\d+$/, "")}${a.n}-${z.n}` : `${a.label}…${z.label}`;
+        const b = el("button", k === layer && i === page ? "on" : "", k === "fav" ? `${i + 1}` : label);
+        b.onclick = () => { layer = k; page = i; store.set("deskLayer", k); store.set("deskPage", i); buildDesk(); };
+        g.append(b);
+      }
+      banks.append(g);
+    }
   }
   const fn = el("div", "dfn");
-  fn.append(el("h3", null, "Rotary"));
-  const rs = el("select");
-  rs.title = "What the rotaries control";
-  if (G.caps.full) { rs.append(new Option("Gain", "gain"), new Option("HPF", "hpf")); }
-  rs.append(new Option("Pan", "pan"));
-  for (let i = 1; i <= G.caps.bus; i++) { const nm = S.get(`/bus/${pad(i)}/config/name`); rs.append(new Option(`Send ${i}${nm ? " " + nm : ""}`, "send:" + i)); }
-  rs.value = rotFn();
-  rs.onchange = () => { store.set("deskRot", rs.value); buildDesk(); };
-  fn.append(rs);
-  const f = rotFn(), n2 = f.startsWith("send:") ? +f.slice(5) : 0;
-  const flip = el("button", "dflip" + (G.sof ? " on" : ""), G.sof ? `Flip off (Bus ${G.sof})` : "Flip to faders");
-  flip.title = "Set Rotary to a send, then show that send on the faders";
-  flip.disabled = !G.sof && !n2;
-  flip.onclick = () => { G.sof = G.sof ? 0 : n2; buildDesk(); };
-  fn.append(flip);
+  fn.append(check("Hide faders", "deskScreen", screenOnly(), (on) => { if (on) G.sof = 0; }));
+  if (G.caps.full) fn.append(check("Follow console bank", "deskFollow", followBank()));
+  fn.append(check("Meters", "deskMeters", store.get("deskMeters", true)));
+  fn.append(check("Aux sends", "deskSends", store.get("deskSends", true)));
+  if (G.caps.full) {
+    fn.append(check("EQ, gate, comp in a window", "deskWindow", store.get("deskWindow", true)));
+    fn.append(check("EQ RTA", "eqRta", rtaOn(), () => events.dispatchEvent(new CustomEvent("rtaopt"))));
+  }
+  if (G.caps.full) fn.append(check("Gate / comp metering", "dynMeters", store.get("dynMeters", true)));
+  if (screenOnly()) {
+    const hide = el("button", null, "Hide this panel");
+    hide.onclick = () => { store.set("deskRailOff", true); buildDesk(); };
+    fn.append(hide);
+  } else {
+    fn.append(el("h3", null, "Rotary"));
+    const rs = el("select");
+    rs.title = "What the rotaries control";
+    if (G.caps.full) rs.append(new Option("Gain", "gain"), new Option("HPF", "hpf"));
+    rs.append(new Option("Pan", "pan"));
+    for (let i = 1; i <= G.caps.bus; i++) { const nm = S.get(`/bus/${pad(i)}/config/name`); rs.append(new Option(`Send ${i}${nm ? " " + nm : ""}`, "send:" + i)); }
+    rs.value = rotFn();
+    rs.onchange = () => { store.set("deskRot", rs.value); buildDesk(); };
+    fn.append(rs);
+    const f = rotFn(), n2 = f.startsWith("send:") ? +f.slice(5) : 0;
+    const flip = el("button", "dflip" + (G.sof ? " on" : ""), G.sof ? `Flip off (Bus ${G.sof})` : "Flip to faders");
+    flip.title = "Set Rotary to a send, then show that send on the faders";
+    flip.disabled = !G.sof && !n2;
+    flip.onclick = () => { G.sof = G.sof ? 0 : n2; buildDesk(); };
+    fn.append(flip);
+  }
   rail.append(banks, fn);
   return rail;
 }
@@ -253,20 +378,32 @@ export function buildDesk() {
   const root = $("#v-desk"); root.innerHTML = "";
   if (!G.caps) { root.append(el("div", "empty", "No console set up. Open Settings.")); return; }
   const n = bankSize(); lastN = n;
-  let list = listOf(layer);
-  if (!list.length) { layer = "in"; list = listOf("in"); }
-  const pages = Math.max(1, Math.ceil(list.length / n));
-  if (page >= pages) page = pages - 1;
-  root.append(buildRail(n));
+  const follow = followBank(), screen = screenOnly();
+  root.classList.toggle("screen", screen); root.classList.toggle("fbank", follow);
+  if (screen && store.get("deskRailOff", false)) {
+    const tab = el("button", "drailtab", "⚙"); tab.title = "Show the panel";
+    tab.onclick = () => { store.set("deskRailOff", false); buildDesk(); };
+    root.append(tab);
+  } else root.append(buildRail(n));
   const box = el("div", "dstrips"); box.id = "dstrips";
-  const part = list.slice(page * n, (page + 1) * n);
-  for (const b of part) box.append(buildStrip(b));
-  for (let i = part.length; i < n; i++) box.append(el("div", "dstrip blank"));
+  if (follow) {
+    const left = side() !== "right" ? leftBank() : [], right = side() !== "left" ? rightBank() : [];
+    for (const b of left) box.append(buildStrip(b));
+    right.forEach((b, i) => { const x = buildStrip(b); if (i === 0 && left.length) x.classList.add("grpstart"); box.append(x); });
+  } else {
+    let list = listOf(layer);
+    if (!list.length) { layer = "in"; list = listOf("in"); }
+    const pages = Math.max(1, Math.ceil(list.length / n));
+    if (page >= pages) page = pages - 1;
+    const part = list.slice(page * n, (page + 1) * n);
+    for (const b of part) box.append(buildStrip(b));
+    for (let i = part.length; i < n; i++) box.append(el("div", "dstrip blank"));
+  }
   root.append(box);
-  if (!isPhone()) {
+  if (!isPhone() && (!follow || side() !== "left")) {
     const m = el("div", "dmasters"); m.id = "dmasters";
     m.append(buildStrip("/main/st", true));
-    if (G.caps.mono) m.append(buildStrip("/main/m", true));
+    if (G.caps.mono && !follow) m.append(buildStrip("/main/m", true));
     root.append(m);
   }
   root.querySelectorAll(`.strip[data-base="${G.selected}"]`).forEach((x) => x.classList.add("sel"));
@@ -288,6 +425,10 @@ addEventListener("resize", () => {
   if (G.view !== "desk" || !G.caps) return;
   const n = bankSize();
   if (n !== lastN) { page = Math.floor((page * lastN) / n); buildDesk(); }
+});
+onAny((p) => {
+  if (G.view !== "desk" || !followBank()) return;
+  if ((p === CH_BANK && side() !== "right") || (p === GRP_BANK && side() !== "left")) queueMicrotask(buildDesk);
 });
 events.addEventListener("sources", (e) => {
   if (G.view === "desk" && JSON.stringify(e.detail) !== JSON.stringify(G.sources)) buildDesk();

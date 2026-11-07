@@ -64,6 +64,7 @@ button.dt.hpf.on { background: #52b6ff; }
 button.dt.gate.on { background: #ffd23f; }
 button.dt.comp.on { background: #ff9d2e; }
 button.dt.ins.on { background: #c58bff; }
+.ds-ins.active button.dt:not(.on) { color: #c58bff; border-color: #c58bff; }
 .dpanel { flex: 1; min-height: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, #292c30, #1a1c1f 3rem); }
 .drot { flex: none; display: flex; flex-direction: column; align-items: center; padding: .2rem 0 .1rem; cursor: ns-resize; touch-action: none; }
 .drot svg { width: 2.5rem; height: 2.5rem; display: block; }
@@ -89,16 +90,49 @@ button.dt.ins.on { background: #c58bff; }
 .dstrip .fv { background: #05080b; border-top: 1px solid #000; color: #ffd27a; font-size: .68rem; }
 .strip.dstrip.muted .cap { filter: none; }
 .strip.dstrip.muted .ds-name { filter: saturate(.5); }
+/* Options: follow the console bank, hide the faders */
+.dchk { display: flex; align-items: center; gap: .3rem; font-size: .66rem; min-height: 1.7rem; color: #c9d3dd; }
+.dchk input { flex: none; }
+.dnow { font-weight: 700; font-size: .78rem; color: #9fd0ff; padding: .2rem 0; }
+.dgroup select { min-height: 1.9rem; font-size: .7rem; padding: .1rem .2rem; background: #101317; border-color: #000; width: 100%; }
+.fbank .dstrips { overflow-x: auto; scrollbar-width: thin; }
+.fbank .strip.dstrip { min-width: 2.7rem; }
+.strip.dstrip.grpstart { border-left: .2rem solid var(--acc); }
+.drailtab { flex: 0 0 1.4rem; align-self: stretch; padding: 0; min-height: 0; background: #1b1d20; border: 1px solid #000; border-radius: .25rem; color: var(--dim); }
+.screen .dscreen { flex: 1; min-height: 0; overflow-y: auto; border-bottom: 0; scrollbar-width: none; }
+.screen .ds-src { height: 1.7rem; }
+.screen .ds-gain { height: 3.6rem; }
+.screen .dgv { font-size: 1rem; }
+.screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { height: 2.5rem; flex-direction: column; align-items: stretch; justify-content: center; gap: .12rem; padding-block: .1rem .24rem; }
+.screen .dv { font-size: .72rem; flex: none; }
+.screen button.dt { min-height: 1.15rem; }
+.screen .ds-eq { flex: 2 0 4rem; height: auto; }
+.screen .ds-send { flex: 1 0 3rem; height: auto; }
+.screen .ds-pan { height: 1.4rem; }
+.screen .ds-lvl { flex: 3 0 6rem; height: auto; align-items: stretch; gap: .25rem; padding: .25rem .18rem; }
+.ds-lvl { height: 3.4rem; align-items: stretch; justify-content: center; padding: .2rem .18rem; }
+.dlm { flex: none; display: flex; gap: .12rem; }
+.dlm .mtr { width: .5rem; }
+.dli { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: .15rem; justify-content: flex-end; text-align: center; }
+.dlv { font-size: .78rem; color: #ffd27a; }
+.dbadge { display: block; font-size: .56rem; font-weight: 800; padding: .14rem 0; border-radius: .14rem; background: #101317; color: #5d6771; }
+.dbadge.bm.on { background: var(--mute); color: #fff; }
+.dbadge.bs.on { background: var(--solo); color: #1a1100; }
+.screen .ds-name { height: 2.6rem; flex: none; }
+.screen .ds-name b { font-size: .84rem; }
+.strip.dstrip.muted .ds-name { border-top-color: var(--mute); }
 @media (max-height: 760px) {
-  .ds-send { height: 1.5rem; } .ds-gain { height: 2.4rem; } .ds-eq { height: 2.4rem; } .ds-src, .ds-hpf, .ds-ins { height: 1.25rem; } .ds-name { height: 2rem; }
+  #v-desk:not(.screen) .ds-send { height: 1.5rem; } #v-desk:not(.screen) .ds-gain { height: 2.4rem; } #v-desk:not(.screen) .ds-eq { height: 2.4rem; } #v-desk:not(.screen) :is(.ds-src, .ds-hpf, .ds-ins) { height: 1.25rem; } #v-desk:not(.screen) .ds-name { height: 2rem; } #v-desk:not(.screen) .ds-lvl { height: 2.6rem; }
   .drot svg { width: 2.1rem; height: 2.1rem; }
 }
 @media (max-height: 640px) {
-  .ds-src, .ds-hpf, .ds-ins, .ds-send { display: none; }
+  #v-desk:not(.screen) :is(.ds-src, .ds-hpf, .ds-ins, .ds-send) { display: none; }
+  #v-desk:not(.screen) .ds-lvl { height: 2rem; }
   .dbtn { flex-direction: row; } .dbtn button { flex: 1; min-width: 0; font-size: .5rem; }
 }
 @media (max-height: 500px) {
-  .ds-eq, .ds-gate, .ds-comp, .ds-gain, .ds-pan { display: none; }
+  #v-desk:not(.screen) :is(.ds-eq, .ds-gate, .ds-comp, .ds-gain, .ds-pan) { display: none; }
+  #v-desk:not(.screen) .ds-lvl { height: 1.4rem; }
   .drot svg { width: 1.7rem; height: 1.7rem; }
 }
 @media (max-width: 760px) {
@@ -115,3 +149,39 @@ button.dt.ins.on { background: #c58bff; }
   .dstrips { flex: 1; min-height: 0; }
   .dbtn button { min-height: 1.9rem; }
 }
+/* Short screens: keep every row of the screen in view */
+@media (max-height: 760px) {
+  .screen .ds-lvl { flex: 3 0 3.5rem; }
+  .screen .ds-src { height: 1.4rem; }
+  .screen .ds-gain { height: 2.6rem; }
+  .screen :is(.ds-hpf, .ds-gate, .ds-comp, .ds-ins) { height: 2.1rem; padding-block: .05rem .2rem; gap: .05rem; }
+  .screen .ds-eq { flex: 2 0 2.5rem; }
+  .screen .ds-send { flex: 1 0 1.5rem; }
+  .screen .ds-name { height: 2.2rem; }
+  .screen .ds-pan { height: 1.2rem; }
+  .screen button.dt { min-height: 1rem; }
+}
+/* Meters off: the row holds only level, mute and solo */
+.ds-lvl.nom, .screen .ds-lvl.nom { flex: none; height: 3.2rem; }
+.ds-lvl.nom, .screen .ds-lvl.nom { height: 3.8rem; }
+.ds-lvl.nom .dli { justify-content: center; }
+/* Window beside the channel strip */
+.dpop { position: fixed; z-index: 45; width: min(30rem, calc(100vw - 8px)); height: min(30rem, calc(100dvh - 8px)); display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--acc); border-radius: .4rem; box-shadow: 0 .6rem 2rem rgba(0,0,0,.7); overflow: hidden; }
+.dpop.dpop-eq { width: min(44rem, calc(100vw - 8px)); height: min(34rem, calc(100dvh - 8px)); }
+.dpopbar { flex: none; display: flex; align-items: center; gap: .5rem; padding: .25rem .4rem; background: var(--panel); border-bottom: 1px solid var(--line); }
+.dpopbar b { flex: 1; min-width: 0; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dpopbar .seg button { min-height: 2rem; padding-inline: .7rem; }
+.dpopbar .seg button.on { background: var(--panel3); box-shadow: inset 0 -.12rem 0 var(--acc); }
+.dpopx { min-height: 2rem; min-width: 2.2rem; padding: 0; }
+.dpop .fcards { padding: .3rem; gap: .3rem; }
+.dpop .fcards .card { padding: .4rem .5rem; gap: .3rem; }
+.dpop .pr { min-height: 1.7rem; }
+/* RTA switch on the EQ graph */
+.rtab { position: absolute; top: .25rem; right: .25rem; z-index: 2; min-height: 1.5rem; padding: 0 .45rem; font-size: .62rem; font-weight: 800; background: rgba(0,0,0,.55); color: var(--dim); }
+.rtab.on { color: #ffd27a; border-color: #ffd27a; }
+/* 48 V and phase state in the gain section */
+.dgi { flex: 1; text-align: center; font-size: .56rem; font-weight: 800; line-height: 1.5; border-radius: .14rem; background: #101317; color: #5d6771; }
+.dgi.p48.on { background: var(--mute); color: #fff; }
+.dgi.inv.on { background: #ffb627; color: #1a1100; }
+/* Rename field over the channel name */
+#dname { position: fixed; z-index: 60; width: 9rem; height: 2.4rem; padding: 0 .4rem; font-size: max(16px, .84rem); font-weight: 700; color: #fff; background: #05080b; border: 2px solid var(--acc); border-radius: .25rem; }

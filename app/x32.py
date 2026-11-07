@@ -14,6 +14,9 @@ SCREEN_POLL = 1.0
 ROUTING_REREAD = 120.0
 READBACK_DELAY = 0.5
 STALE_WINDOW = 0.4
+RTA_METER = "/meters/15"
+RTA_PATHS = ("/-stat/rtasource", "/-prefs/rta/source", "/-prefs/rta/option")
+RTA_HOLD = 9.0
 METER_IDS = ("/meters/1", "/meters/2", "/meters/3")
 METER_LEN = {"/meters/1": 96, "/meters/2": 49, "/meters/3": 22}
 
@@ -100,6 +103,10 @@ class X32(Console):
         self.sock.bind(("0.0.0.0", 0))
         self.sock.settimeout(1.0)
         self.read_lock = threading.Lock()
+        self.rta_lock = threading.Lock()
+        self.rta_saved = {}
+        self.rta_sel = -1
+        self.rta_until = 0.0
         threading.Thread(target=self._rx, daemon=True).start()
         threading.Thread(target=self._keepalive, daemon=True).start()
         threading.Thread(target=self._screen_poll, daemon=True).start()
@@ -217,6 +224,8 @@ class X32(Console):
                 self.info = f"{args[2]} \"{args[1]}\" fw {args[3]} at {args[0]}"
             elif addr in METER_LEN and args and isinstance(args[0], bytes):
                 self._meter(addr, args[0])
+            elif addr == RTA_METER and args and isinstance(args[0], bytes):
+                self._rta(args[0])
             elif addr in ("/load", "/save"):
                 pass
             elif args and not addr.startswith("/meters"):
@@ -237,9 +246,49 @@ class X32(Console):
         self.meters[addr] = bytes(level_byte(x) for x in struct.unpack(f"<{n}f", blob[4:4 + n * 4]))
         self.meter_bytes = b"".join(self.meters.get(m, bytes(METER_LEN[m])) for m in METER_IDS)
 
+    def _rta(self, blob):
+        """100 little-endian shorts, dB * 256. All zero means no data, not 100 clipped bands."""
+        if len(blob) < 4:
+            return
+        n = min(struct.unpack("<i", blob[:4])[0], (len(blob) - 4) // 4, 50)
+        vals = struct.unpack(f"<{n * 2}h", blob[4:4 + n * 4])
+        self.rta_bytes = bytes(round(max(0.0, min(1.0, (v / 256 + 96) / 96)) * 255) for v in vals) if any(vals) else b""
+
+    def rta_want(self, sel):
+        """Feed the RTA from one strip while a page shows it. The console's own RTA settings come back after."""
+        with self.rta_lock:
+            if sel < 0:
+                return self._rta_stop()
+            if not self.rta_saved:
+                # Read first. A setting that does not answer is not changed, so it needs no restore.
+                for p in RTA_PATHS:
+                    self.send(p)
+                end = time.time() + 0.3
+                while time.time() < end and any(p not in self.state for p in RTA_PATHS):
+                    time.sleep(0.01)
+                self.rta_saved = {p: self.state[p] for p in RTA_PATHS if p in self.state}
+                self.rta_sel = -1
+                if RTA_PATHS[2] in self.rta_saved:
+                    self.send(RTA_PATHS[2], int(self.rta_saved[RTA_PATHS[2]]) | 4)  # bit 2: use RTA source
+            if sel != self.rta_sel:
+                self.rta_sel = sel
+                for p, v in ((RTA_PATHS[0], sel), (RTA_PATHS[1], sel + 2)):
+                    if p in self.rta_saved:
+                        self.send(p, v)
+            self.rta_until = time.time() + RTA_HOLD
+            self.send("/meters", RTA_METER)
+
+    def _rta_stop(self):
+        for p, v in self.rta_saved.items():
+            if v is not None:
+                self.send(p, v)
+        self.rta_saved = {}
+        self.rta_until = 0.0
+        self.rta_bytes = b""
+
     def _screen_poll(self):
         """Follow mode: a lost UDP push must not leave the wrong page on screen."""
-        paths = [p for p in self.fast if p == "/-stat/selidx" or p.startswith("/-stat/screen/")]
+        paths = [p for p in self.fast if p in ("/-stat/selidx", "/-stat/chfaderbank", "/-stat/grpfaderbank") or p.startswith("/-stat/screen/")]
         while not self.stopped:
             time.sleep(SCREEN_POLL)
             if self.ip and self.meter_clients > 0 and self.connected and not self.reading:
@@ -255,6 +304,9 @@ class X32(Console):
                 if self.meter_clients > 0:
                     for m in METER_IDS:
                         self.send("/meters", m)
+                with self.rta_lock:
+                    if self.rta_saved and time.time() > self.rta_until:
+                        self._rta_stop()
                 if self.connected and time.time() - last_read > ROUTING_REREAD:
                     last_read = time.time()
                     self.read_paths(list(self.routing_paths))

@@ -149,6 +149,28 @@ def main():
     a2.write("/config/osc/f1", 0.25, "app")
     assert wait(lambda: xs2.state.get("/config/osc/f1") == 0.25), "float write"
 
+    # DiGiCo view: the console reports its fader banks
+    assert wait(lambda: a2.state.get("/-stat/chfaderbank") == 0 and a2.state.get("/-stat/grpfaderbank") == 0), "bank read"
+    xs2.desk("/-stat/chfaderbank", 2)
+    xs2.desk("/-stat/grpfaderbank", 3)
+    assert wait(lambda: a2.state.get("/-stat/chfaderbank") == 2 and a2.state.get("/-stat/grpfaderbank") == 3), "bank push"
+    assert lk2.count == n, "bank change was linked"
+
+    # RTA: fed from one strip while wanted, console settings restored after
+    xs2.desk("/-prefs/rta/source", 1)
+    xs2.desk("/-prefs/rta/option", 1)
+    xs2.desk("/-stat/rtasource", 7)
+    assert wait(lambda: a2.state.get("/-stat/rtasource") == 7 and a2.state.get("/-prefs/rta/option") == 1), "rta prefs"
+    a2.rta_want(5)
+    assert wait(lambda: xs2.state.get("/-stat/rtasource") == 5 and xs2.state.get("/-prefs/rta/source") == 7 and xs2.state.get("/-prefs/rta/option") == 5), "rta set"
+    assert wait(lambda: len(a2.rta_bytes) == 100 and max(a2.rta_bytes) > 100), "rta data"
+    a2.rta_want(-1)
+    assert wait(lambda: xs2.state.get("/-stat/rtasource") == 7 and xs2.state.get("/-prefs/rta/source") == 1 and xs2.state.get("/-prefs/rta/option") == 1), "rta restore"
+    assert a2.rta_bytes == b""
+    import struct as _s
+    a2._rta(_s.pack("<i", 50) + bytes(200))
+    assert a2.rta_bytes == b"", "all zero is no data"
+
     # Channel link and insert position from the channel menu
     for p in ("/config/chlink/1-2", "/config/mtxlink/5-6", "/ch/01/insert/pos", "/ch/01/insert/on"):
         assert mixer.WRITE_OK.match(p), p

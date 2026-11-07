@@ -253,7 +253,13 @@ export async function buildSettings() {
   fc.onchange = () => store.set("followTwoWay", fc.checked); fw.append(fc, "Follow mode: taps here also change the console screen");
   const fk = el("label", "chk"), kc = el("input"); kc.type = "checkbox"; kc.checked = store.get("followKnobs", true);
   kc.onchange = () => store.set("followKnobs", kc.checked); fk.append(kc, "Follow mode: show what the console knobs do");
-  row.append(el("span", "note", "Size"), size, el("span", "note", "Theme"), th, syn, fw, fk); ui.append(row);
+  const dm = el("label", "chk"), dc = el("input"); dc.type = "checkbox"; dc.checked = store.get("dynMeters", true);
+  dc.onchange = () => store.set("dynMeters", dc.checked); dm.append(dc, "Gate and comp: show level and gain reduction");
+  const mm = el("label", "chk"), mc = el("input"); mc.type = "checkbox"; mc.checked = store.get("deskMeters", true);
+  mc.onchange = () => store.set("deskMeters", mc.checked); mm.append(mc, "DiGiCo view: show meters");
+  const rm = el("label", "chk"), rc = el("input"); rc.type = "checkbox"; rc.checked = store.get("eqRta", true);
+  rc.onchange = () => store.set("eqRta", rc.checked); rm.append(rc, "EQ: show RTA");
+  row.append(el("span", "note", "Size"), size, el("span", "note", "Theme"), th, syn, fw, fk, dm, mm, rm); ui.append(row);
   ui.append(el("p", "note", "Keys: 1-6 layers, ← → channel, M mute, S solo, I channel panel, Ctrl+Z undo. Shift while dragging for fine moves. Double click a value to type it. Double click a fader for 0 dB."));
   w.append(ui);
   const out = el("div", "sec"); const lo = el("button", null, "Log out");

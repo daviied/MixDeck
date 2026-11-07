@@ -21,6 +21,7 @@ class X32Sim:
     def __init__(self):
         s = mixer.fast_defaults()
         s.update(mixer.slow_defaults())
+        s.update({"/-stat/rtasource": 0, "/-prefs/rta/source": 1, "/-prefs/rta/option": 0})
         s.update({p: 0 for p in M.all_read_paths()})
         s.update({M.p_source(f): (int(f[2:]) if f.startswith("ch") else 32 + int(f[3:])) for f in M.FADERS})
         for i, b in enumerate(M.IN_BLOCKS):
@@ -132,6 +133,10 @@ class X32Sim:
             m2 = buses + buses[:6] + [main, main * .97, main * .7] + [1.0] * 16 + [1.0] * 6 + [.9, 1.0]
             m3 = buses[:6] + [v * .5 for v in lvl[:8]] + [v * .6 for v in lvl[8:16]]
             pack = {"/meters/1": lvl + gate + dyn, "/meters/2": m2, "/meters/3": m3}
+            rta = self.meter_subs.get("/meters/15")
+            if rta and now < rta[1]:
+                bands = [int(max(-127.0, -30 - abs(i - 35) * .6 - random.random() * 6) * 256) for i in range(100)]
+                self.sock.sendto(osc_encode("/meters/15", struct.pack("<i", 50) + struct.pack("<100h", *bands)), rta[0])
             for k, (peer, until) in list(self.meter_subs.items()):
                 if now < until and k in pack:
                     f = pack[k]

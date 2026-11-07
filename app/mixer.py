@@ -67,6 +67,8 @@ def fast_defaults():
     d["/config/solo/mono"] = 0
     d["/-show/prepos/current"] = 0
     d["/-stat/selidx"] = 0
+    d["/-stat/chfaderbank"] = 0
+    d["/-stat/grpfaderbank"] = 0
     d["/-stat/screen/screen"] = 0
     for s in ("CHAN", "METER", "ROUTE", "SETUP", "LIB", "FX", "MON", "USB", "SCENE", "ASSIGN"):
         d[f"/-stat/screen/{s}/page"] = 0

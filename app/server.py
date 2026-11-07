@@ -232,6 +232,7 @@ class H(BaseHTTPRequestHandler):
             last_status = last_ping = 0.0
             last_meter = b""
             last_mtime = 0.0
+            last_rta = b""
             while True:
                 time.sleep(0.04)
                 now = time.time()
@@ -249,6 +250,9 @@ class H(BaseHTTPRequestHandler):
                     if c.meter_bytes and (c.meter_bytes != last_meter or now - last_mtime > .4):  # a steady level is still live
                         last_meter, last_mtime = c.meter_bytes, now
                         self.wfile.write(b"event: m\ndata: " + base64.b64encode(last_meter) + b"\n\n")
+                    if c.rta_bytes and c.rta_bytes != last_rta:
+                        last_rta = c.rta_bytes
+                        self.wfile.write(b"event: r\ndata: " + base64.b64encode(last_rta) + b"\n\n")
                     if c.routing_version != rv:
                         rv = c.routing_version
                         send("sources", strip_sources(c))
@@ -361,6 +365,11 @@ class H(BaseHTTPRequestHandler):
             for p, v in body["sets"][:400]:
                 if mixer.WRITE_OK.match(p) and isinstance(v, (int, float, str)):
                     c.write(p, v, "app")
+            return self._json(200, {"ok": True})
+        if path == "/api/rta":
+            sel = int(body.get("sel", -1))
+            if c and c.kind == "x32" and -1 <= sel <= 71:
+                c.rta_want(sel)
             return self._json(200, {"ok": True})
         if path == "/api/read":
             if c:

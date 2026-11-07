@@ -1,7 +1,7 @@
 // Shell: login, navigation, console switch, keys.
 import { S, G, $, el, api, set, store, openStream, events, undo, canUndo, scope, FADER, stripDef, layerStrips, onAny, toast, clearSolos } from "./core.js";
 import { buildMix, select } from "./mix.js";
-import { buildInspector, initInspector } from "./inspector.js";
+import { buildInspector, initInspector, closePop } from "./inspector.js";
 import { buildFx, buildScenes, buildLink, buildSettings, applyDisplay } from "./pages.js";
 import { buildMidi, initMidi, midi } from "./midi.js";
 import { pr } from "./ui.js";
@@ -31,6 +31,7 @@ function drawNav() {
 }
 const BUILD = { mix: () => { buildMix(); buildInspector({}); }, desk: () => { buildMix(); buildDesk(); }, fx: buildFx, scenes: buildScenes, link: buildLink, midi: buildMidi, settings: buildSettings, patch: () => {}, follow: buildFollowPage };
 function go(v) {
+  if (v !== "desk") closePop();
   G.view = v; if (!isFollow()) store.set("view", v);
   drawNav();
   document.querySelectorAll(".view").forEach((s) => s.classList.toggle("on", s.id === "v-" + v));

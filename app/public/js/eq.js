@@ -1,5 +1,5 @@
 // EQ maths, EQ graph, dynamics graphs.
-import { S, set, el, clamp, SCL, on, G, meters } from "./core.js";
+import { S, set, el, clamp, SCL, on, G, meters, store, rta, api, events, stripDef, emit } from "./core.js";
 
 const FS = 48000;
 const BC = ["#ff7a59", "#ffd23f", "#38d67a", "#4e9bff", "#e45bd8", "#3fd9e0"];
@@ -47,8 +47,20 @@ const nf = (f) => Math.log(f / 20) / Math.log(1000);
 
 export function bandCount(kind) { return ["ch", "auxin", "fxrtn"].includes(kind) ? 4 : 6; }
 
+// RTA: 100 bands from 20 Hz to 18.66 kHz, equal steps on a log scale.
+const RTA_STEP = Math.pow(18660 / 20, 1 / 99);
+const rtaF = (i) => 20 * Math.pow(RTA_STEP, i);
+let rtaGraphs = 0, rtaOffTimer = 0;
+export const rtaOn = () => store.get("eqRta", true);
+const rtaSend = (sel) => api("/api/rta", { c: G.slot, sel }, true).catch(() => {});
+
 export function eqGraph(sc, base, n, hasHp, onSel) {
   const box = el("div", "eqbox"), cv = el("canvas"); box.append(cv);
+  const def = stripDef(base), rb = el("button", "rtab", "RTA");
+  rb.title = "Show the spectrum of this channel behind the EQ curve";
+  rb.addEventListener("pointerdown", (e) => e.stopPropagation());
+  rb.onclick = () => { store.set("eqRta", !rtaOn()); emit("rtaopt"); };
+  box.append(rb);
   let selBand = 0, raf = 0;
   const RANGE = 18, css = getComputedStyle(document.documentElement);
   const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
@@ -66,6 +78,13 @@ export function eqGraph(sc, base, n, hasHp, onSel) {
     for (const d of [-12, -6, 0, 6, 12]) {
       c.strokeStyle = d ? "rgba(255,255,255,.07)" : "rgba(255,255,255,.2)"; c.beginPath(); c.moveTo(0, y(d)); c.lineTo(W, y(d)); c.stroke();
       if (d) { c.fillStyle = "rgba(255,255,255,.35)"; c.fillText((d > 0 ? "+" : "") + d, 3, y(d) + 1); }
+    }
+    if (rtaOn() && performance.now() - rta.at < 1000) {
+      c.fillStyle = "rgba(255,210,122,.3)";
+      for (let i = 0; i < 100; i++) {
+        const X0 = x(rtaF(i)), X1 = x(rtaF(i + 1)), h = (rta.b[i] / 255) * H;
+        c.fillRect(X0, H - h, Math.max(1, X1 - X0 - 1), h);
+      }
     }
     const pts = Math.min(240, W), r = curve(base, n, pts, hasHp);
     const on = S.get(`${base}/eq/on`) ?? 1;
@@ -86,6 +105,22 @@ export function eqGraph(sc, base, n, hasHp, onSel) {
   sc.on(`${base}/eq/on`, redraw, false);
   if (hasHp) { sc.on(`${base}/preamp/hpon`, redraw, false); sc.on(`${base}/preamp/hpf`, redraw, false); }
   const ro = new ResizeObserver(redraw); ro.observe(box); sc.add(() => ro.disconnect());
+
+  // The console sends RTA data only while a visible graph asks for it.
+  const ask = () => { if (rtaOn() && box.isConnected && box.clientWidth && def) rtaSend(def.sel); };
+  const showRta = () => { rb.classList.toggle("on", rtaOn()); redraw(); };
+  const onOpt = () => { showRta(); if (rtaOn()) ask(); else if (def) rtaSend(-1); };
+  showRta();
+  events.addEventListener("rta", redraw); events.addEventListener("rtaopt", onOpt);
+  const timer = setInterval(() => { ask(); redraw(); }, 4000);
+  setTimeout(ask, 50);
+  clearTimeout(rtaOffTimer); rtaGraphs++;
+  sc.add(() => {
+    clearInterval(timer); events.removeEventListener("rta", redraw); events.removeEventListener("rtaopt", onOpt);
+    rtaGraphs--;
+    clearTimeout(rtaOffTimer);
+    rtaOffTimer = setTimeout(() => { if (!rtaGraphs && rtaOn()) rtaSend(-1); }, 400);
+  });
 
   // Each finger holds one band node.
   const held = new Map();
@@ -129,6 +164,7 @@ export function dynGraph(sc, base, sect, def, isGate) {
   const P = `${base}/${sect}/`;
   const lo = isGate ? -80 : -60;
   let raf = 0, alive = true;
+  const metering = store.get("dynMeters", true);
   sc.add(() => { alive = false; cancelAnimationFrame(raf); });
   const scale = isGate ? SCL.gthr : SCL.thr;
   function loop() {
@@ -150,7 +186,7 @@ export function dynGraph(sc, base, sect, def, isGate) {
     c.strokeStyle = "rgba(255,182,39,.8)"; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(X(thr), 0); c.lineTo(X(thr), H); c.stroke(); c.setLineDash([]);
     // live level and gain reduction
     const mi = def.meter[0];
-    if (mi != null && G.caps && G.caps.meters) {
+    if (metering && mi != null && G.caps && G.caps.meters) {
       const lv = meters.b[mi] / 2.55 - 80;
       if (lv > lo) { c.beginPath(); c.arc(X(lv), Y(out(lv)), 4, 0, 7); c.fillStyle = "#fff"; c.fill(); }
       const gi = isGate ? def.gate : def.gr;

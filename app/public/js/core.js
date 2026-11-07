@@ -98,6 +98,7 @@ export async function api(path, body, quiet) {
 
 // ---- stream ----
 export const meters = { b: new Uint8Array(167), at: 0 };
+export const rta = { b: new Uint8Array(100), at: 0 };
 let es = null;
 export function openStream() {
   if (es) es.close();
@@ -114,6 +115,11 @@ export function openStream() {
   es.addEventListener("sources", J((d) => { const old = G.sources; G.sources = d; emit("sources", old); }));
   es.addEventListener("routing", (e) => window.Router && Router.setState(e.data));
   es.addEventListener("reload", () => { setTimeout(openStream, 150); });
+  es.addEventListener("r", (e) => {
+    const s = atob(e.data);
+    for (let i = 0; i < s.length && i < 100; i++) rta.b[i] = s.charCodeAt(i);
+    rta.at = performance.now(); emit("rta");
+  });
   es.addEventListener("m", (e) => {
     const s = atob(e.data);
     if (meters.b.length !== s.length) meters.b = new Uint8Array(s.length);
