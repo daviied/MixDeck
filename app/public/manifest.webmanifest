@@ -1,0 +1,15 @@
+{
+  "name": "MixDeck",
+  "short_name": "MixDeck",
+  "description": "Mixing console control for X32 and Yamaha TF1",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14171b",
+  "theme_color": "#14171b",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

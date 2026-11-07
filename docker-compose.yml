@@ -1,0 +1,24 @@
+name: mixdeck
+services:
+  mixdeck:
+    image: ghcr.io/daviied/mixdeck:latest
+    container_name: mixdeck
+    restart: unless-stopped
+    # Host networking lets "Find X32" broadcast on your LAN.
+    network_mode: host
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      X32_IP: ${X32_IP:-}
+      X32_MOCK: ${X32_MOCK:-0}
+      PORT: ${PORT:-8080}
+    volumes:
+      - /DATA/AppData/mixdeck:/data
+x-casaos:
+  main: mixdeck
+  title:
+    en_us: MixDeck
+  description:
+    en_us: Mixing console control for X32 and Yamaha TF1, with console link and MIDI.
+  port_map: "8080"
+  category: Utilities

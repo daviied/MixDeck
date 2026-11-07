@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#14171b">
+<title>MixDeck</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/router.css">
+<link rel="stylesheet" href="/desk.css">
+</head>
+<body>
+<div id="login" hidden>
+  <form id="loginForm">
+    <h1><img class="logo" src="/icons/icon-192.png" alt="">MixDeck</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button class="primary">Log in</button>
+    <p id="loginErr"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><img class="logo" src="/icons/icon-192.png" alt=""><span>MixDeck</span></div>
+    <div class="consoles" id="consoles"></div>
+    <span id="linkChip" class="linkchip" hidden></span>
+    <nav class="views" id="views"></nav>
+    <div class="right">
+      <div class="read" id="readBar" title="Reading console" hidden><i></i></div>
+      <div class="mon" id="mon"></div>
+      <button id="follow" title="Show what the console screen shows" hidden>Follow</button>
+      <button id="undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+      <button id="clearSolo" title="Clear all solo">Solo</button>
+    </div>
+  </header>
+  <div class="fbar" id="fbar" hidden></div>
+  <section class="view" id="v-follow"></section>
+
+  <section class="view" id="v-mix">
+    <div class="insp" id="insp"></div>
+    <div class="resizer" id="resizer"></div>
+    <div class="layerbar" id="layerbar"></div>
+    <div class="mixwrap">
+      <div class="strips" id="strips"></div>
+      <div class="masters" id="masters"></div>
+    </div>
+  </section>
+  <section class="view" id="v-desk"></section>
+  <section class="view page" id="v-fx"></section>
+  <section class="view page" id="v-scenes"></section>
+  <section class="view" id="v-patch">
+    <div id="patchView">
+      <div class="rtabs"><div class="seg" id="rtabs">
+        <button data-tab="route" class="on">Route</button>
+        <button data-tab="blocks">Blocks</button>
+        <button data-tab="devices">Devices</button>
+        <button data-tab="plan">Plan</button>
+      </div></div>
+      <div id="noRouting" class="note" hidden>Patching needs an X32. Set one up in Settings.</div>
+      <div>
+    <section id="tab-route" class="tab">
+      <div class="bar">
+        <div class="seg" id="mode">
+          <button data-mode="in" class="on">Inputs</button>
+          <button data-mode="out">Outputs</button>
+          <button data-mode="ins">Inserts</button>
+          <button data-mode="patch">Patch bay</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="advance" checked> Auto-advance</label>
+        <button id="fxins" class="hidden">FX insert</button>
+        <button id="clear" class="danger hidden">Unassign</button>
+        <div id="hint" class="hint"></div>
+      </div>
+      <div id="faderWrap">
+        <h2>Faders</h2>
+        <div id="faders" class="faders"></div>
+      </div>
+      <div id="routeIn">
+        <h2>Stage boxes</h2>
+        <div id="boxesIn" class="boxes"></div>
+      </div>
+      <div id="routePatch" class="hidden">
+        <div class="row">
+          <span class="note">Show cables:</span>
+          <label class="chk"><input type="checkbox" id="showIn" checked> Inputs</label>
+          <label class="chk"><input type="checkbox" id="showOut" checked> Outputs</label>
+          <label class="chk"><input type="checkbox" id="showIns" checked> Inserts</label>
+        </div>
+        <p class="note">Drag from one jack to another to patch. Drag a patched jack to empty space to unplug. Tap a cable to unplug it.</p>
+        <div id="patch" class="patch"></div>
+      </div>
+      <div id="routeIns" class="hidden">
+        <h2>Insert devices</h2>
+        <div id="boxesIns" class="boxes"></div>
+      </div>
+      <div id="routeOut" class="hidden">
+        <h2>Stage box outputs</h2>
+        <div id="boxesOut" class="boxes"></div>
+        <h2>Source</h2>
+        <div id="sources" class="sources"></div>
+      </div>
+    </section>
+
+    <section id="tab-blocks" class="tab hidden">
+      <p class="note">X32 routing is set in groups of 8. Set channel blocks to <b>User In</b> and output blocks to <b>User Out</b> so the Route tab can patch single channels.</p>
+      <h2>Fader input blocks</h2>
+      <div class="row"><button id="allUin">Set Ch 1-32 to User In 1-32</button></div>
+      <div id="inBlocks" class="blockgrid"></div>
+      <h2>Output blocks</h2>
+      <div id="outBlocks"></div>
+    </section>
+
+    <section id="tab-devices" class="tab hidden">
+      <div class="row">
+        <select id="newPreset"></select>
+        <button id="addDev" class="primary">Add device</button>
+      </div>
+      <div class="card">
+        <b>Aux insert pool</b>
+        <p class="note">Auxes the app may use for outboard units (it picks a free one on each insert). Untick an Aux you use for something else. Each Aux N in use needs User In N for its return, so keep your channels off those User Ins.</p>
+        <div id="auxPool" class="row"></div>
+      </div>
+      <div id="devList"></div>
+      <div class="row"><button id="saveDevs" class="primary">Save devices</button></div>
+    </section>
+
+    <section id="tab-plan" class="tab hidden">
+      <div class="row noprint">
+        <input id="showName" placeholder="Show / event name">
+        <button id="printPlan" class="primary">Print</button>
+      </div>
+      <div id="plan" class="plan"></div>
+    </section>
+      </div>
+    </div>
+  </section>
+  <section class="view page" id="v-link"></section>
+  <section class="view page" id="v-midi"></section>
+  <section class="view page" id="v-settings"></section>
+  <div class="kbar" id="kbar" hidden></div>
+  <div id="toast"></div>
+</div>
+<script src="/router.js"></script>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
