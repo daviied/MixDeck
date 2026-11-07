@@ -94,6 +94,17 @@ onAny((p) => { if (p.startsWith("/-stat/solosw/")) soloState(); });
 
 $("#undo").onclick = undo;
 $("#clearSolo").onclick = clearSolos;
+// Full screen. iPhone Safari has no full screen for pages: there the button stays hidden.
+{
+  const root = document.documentElement, btn = $("#fullscreen");
+  const enter = root.requestFullscreen || root.webkitRequestFullscreen;
+  const leave = document.exitFullscreen || document.webkitExitFullscreen;
+  const now = () => document.fullscreenElement || document.webkitFullscreenElement;
+  btn.hidden = !enter;
+  btn.onclick = () => { try { Promise.resolve(now() ? leave.call(document) : enter.call(root)).catch((e) => toast(e.message, true)); } catch (e) { toast(e.message, true); } };
+  const draw = () => { const on = !!now(); btn.classList.toggle("on", on); btn.title = on ? "Exit full screen" : "Full screen"; btn.setAttribute("aria-label", btn.title); };
+  document.addEventListener("fullscreenchange", draw); document.addEventListener("webkitfullscreenchange", draw);
+}
 $("#follow").onclick = () => (isFollow() ? exitFollow() : enterFollow(true));
 
 document.addEventListener("keydown", (e) => {

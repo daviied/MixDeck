@@ -63,6 +63,7 @@ nav.views svg { display: none; }
 .read { width: 5rem; height: .25rem; border-radius: 1rem; background: var(--panel3); overflow: hidden; }
 .read i { display: block; height: 100%; background: var(--acc); width: 0; transition: width .3s; }
 #clearSolo { color: var(--dim); }
+#fullscreen.on { color: var(--acc); border-color: var(--acc); }
 #clearSolo.active { background: var(--solo); border-color: var(--solo); color: #1a1100; font-weight: 700; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .72; } }
 .mon { display: flex; align-items: center; gap: .35rem; color: var(--dim); font-size: .72rem; width: 9rem; }

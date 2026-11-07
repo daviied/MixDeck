@@ -1,4 +1,4 @@
-const C = "mixdeck-v6";
+const C = "mixdeck-v7";
 const SHELL = ["/", "/index.html", "/style.css", "/router.css", "/desk.css", "/router.js", "/fxdefs.json", "/manifest.webmanifest", "/icons/icon-192.png",
   "/js/app.js", "/js/core.js", "/js/ui.js", "/js/eq.js", "/js/mix.js", "/js/inspector.js", "/js/pages.js", "/js/midi.js", "/js/follow.js", "/js/knobs.js", "/js/patchpop.js", "/js/desk.js"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL))); self.skipWaiting(); });

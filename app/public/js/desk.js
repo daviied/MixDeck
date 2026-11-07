@@ -16,11 +16,19 @@ const screenOnly = () => store.get("deskScreen", false);
 const followBank = () => !!(G.caps && G.caps.full) && store.get("deskFollow", false);
 const side = () => store.get("deskSide", "left");
 const CH_BANK = "/-stat/chfaderbank", GRP_BANK = "/-stat/grpfaderbank";
-const LEFT_NAMES = ["CH 1-16", "CH 17-32", "Aux / USB / FX", "Bus masters"], RIGHT_NAMES = ["DCA 1-8", "Bus 1-8", "Bus 9-16", "Matrix, M/C"];
+const RIGHT_NAMES = ["DCA 1-8", "Bus 1-8", "Bus 9-16", "Matrix, M/C"];
+// Standard: 16 input faders. Compact: 8 input faders, so more layers. The right bank is the same on both.
+const compact = () => !!(G.caps && G.caps.type === "x32") && store.get("deskModel", "x32") === "compact";
+const LEFT_NAMES = () => compact()
+  ? ["CH 1-8", "CH 9-16", "CH 17-24", "CH 25-32", "Aux / USB", "FX returns", "Bus 1-8", "Bus 9-16"]
+  : ["CH 1-16", "CH 17-32", "Aux / USB / FX", "Bus masters"];
 // The strips under the console's two fader banks, from the bank it reports.
 function leftBank() {
-  const i = layerStrips("in"), b = layerStrips("bus");
-  return [i.slice(0, 16), i.slice(16, 32), layerStrips("aux"), b][S.get(CH_BANK) || 0] || [];
+  const i = layerStrips("in"), a = layerStrips("aux"), b = layerStrips("bus");
+  const banks = compact()
+    ? [i.slice(0, 8), i.slice(8, 16), i.slice(16, 24), i.slice(24, 32), a.slice(0, 8), a.slice(8, 16), b.slice(0, 8), b.slice(8, 16)]
+    : [i.slice(0, 16), i.slice(16, 32), a, b];
+  return banks[S.get(CH_BANK) || 0] || [];
 }
 function rightBank() {
   const b = layerStrips("bus");
@@ -29,7 +37,7 @@ function rightBank() {
 function bankSize() {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
   const side = isPhone() ? 0 : (7.5 + (G.caps && G.caps.mono ? 2 : 1) * 5.6) * rem;
-  return clamp(Math.floor((innerWidth - side) / (4.4 * rem)), isPhone() ? 3 : 4, 12);
+  return clamp(Math.floor((innerWidth - side) / (4.4 * rem)), isPhone() ? 3 : 4, compact() ? 8 : 12);
 }
 const listOf = (k) => { const l = layerStrips(k); return k === "bus" && isPhone() ? [...l, "/main/st"] : l; };
 
@@ -315,7 +323,7 @@ function buildRail(n) {
   if (followBank()) {
     const g = el("div", "dgroup"), sd = el("select");
     g.append(el("h3", null, "Console bank"));
-    if (side() !== "right") g.append(el("div", "dnow", LEFT_NAMES[S.get(CH_BANK) || 0]));
+    if (side() !== "right") g.append(el("div", "dnow", LEFT_NAMES()[S.get(CH_BANK) || 0] || "Unknown bank"));
     if (side() !== "left") g.append(el("div", "dnow", RIGHT_NAMES[S.get(GRP_BANK) || 0]));
     g.append(el("h3", null, "Show"));
     sd.append(new Option("Left bank", "left"), new Option("Right bank", "right"), new Option("Both banks", "both"));
@@ -339,6 +347,14 @@ function buildRail(n) {
     }
   }
   const fn = el("div", "dfn");
+  if (G.caps.type === "x32") {
+    const md = el("select");
+    md.title = "Fader layout of the console";
+    md.append(new Option("X32 standard", "x32"), new Option("X32 Compact", "compact"));
+    md.value = compact() ? "compact" : "x32";
+    md.onchange = () => { store.set("deskModel", md.value); page = 0; store.set("deskPage", 0); buildDesk(); };
+    fn.append(el("h3", null, "Console layout"), md);
+  }
   fn.append(check("Hide faders", "deskScreen", screenOnly(), (on) => { if (on) G.sof = 0; }));
   if (G.caps.full) fn.append(check("Follow console bank", "deskFollow", followBank()));
   fn.append(check("Meters", "deskMeters", store.get("deskMeters", true)));
